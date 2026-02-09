@@ -1,0 +1,39 @@
+self := import("@platforma-sdk/workflow-tengo:tpl")
+exec := import("@platforma-sdk/workflow-tengo:exec")
+assets := import("@platforma-sdk/workflow-tengo:assets")
+
+parapredSw := assets.importSoftware("@platforma-open/MiLaboratories.paratope-clustering.software:run-parapred-pipeline")
+
+self.validateInputs({
+	"__options__,closed": "",
+	emptyOrNot: "any",
+	seqTable: "any",
+	paratopeThreshold: "number"
+})
+
+self.defineOutputs("fasta", "paratopeSequences")
+
+self.body(func(inputs) {
+	if string(inputs.emptyOrNot.getData()) == "empty" {
+		return {
+			fasta: {},
+			paratopeSequences: {}
+		}
+	}
+
+	result := exec.builder().
+		software(parapredSw).
+		mem("32GiB").
+		cpu(4).
+		addFile("input.tsv", inputs.seqTable).
+		arg("--input").arg("input.tsv").
+		arg("--threshold").arg(string(inputs.paratopeThreshold)).
+		saveFile("output.fasta").
+		saveFile("paratope-sequences.tsv").
+		run()
+
+	return {
+		fasta: result.getFile("output.fasta"),
+		paratopeSequences: result.getFile("paratope-sequences.tsv")
+	}
+})
