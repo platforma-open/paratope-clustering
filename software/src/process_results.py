@@ -73,8 +73,12 @@ clusters = clusters.join(
 # --- Generate cluster-to-seq.tsv ---
 unique_clusters_info = clusters.select(["clusterId", "clusterLabel", "size"]).unique(subset=["clusterId"], keep="first")
 
+centroid_select_cols = [pl.col('clonotypeKey').alias("centroid_key_cts")] + sequence_cols + ["paratope_sequence"]
+if "flanked_sequence" in cloneTable.columns:
+    centroid_select_cols.append("flanked_sequence")
+
 centroid_sequences_for_cts = cloneTable.select(
-    [pl.col('clonotypeKey').alias("centroid_key_cts")] + sequence_cols + ["paratope_sequence"]
+    centroid_select_cols
 ).unique("centroid_key_cts", keep="first")
 
 cluster_to_seq_df = unique_clusters_info.join(
@@ -85,6 +89,8 @@ cluster_to_seq_df = unique_clusters_info.join(
 )
 
 required_cols_cts = ['clusterId', 'clusterLabel', 'size'] + sequence_cols + ['paratope_sequence']
+if "flanked_sequence" in cluster_to_seq_df.columns:
+    required_cols_cts.append("flanked_sequence")
 cluster_to_seq = cluster_to_seq_df.select(required_cols_cts)
 cluster_to_seq.write_csv(clusterToSeqTsv, separator="\t")
 
@@ -139,17 +145,19 @@ top_cluster_ids_df = abundances_per_cluster.sort(
 ).head(100).select('clusterId')
 
 # --- Export per-clonotype paratope sequences ---
+paratope_out_cols = ["clonotypeKey", "paratope_sequence"]
+if "flanked_sequence" in cloneTable.columns:
+    paratope_out_cols.append("flanked_sequence")
+
 if "paratope_sequence" in cloneTable.columns:
     (
         cloneTable
-        .select(["clonotypeKey", "paratope_sequence"])
+        .select(paratope_out_cols)
         .unique(subset=["clonotypeKey"], keep="first")
     ).write_csv("paratope-sequences.tsv", separator="\t")
 else:
-    pl.DataFrame({
-        "clonotypeKey": [],
-        "paratope_sequence": []
-    }).write_csv("paratope-sequences.tsv", separator="\t")
+    empty_data = {"clonotypeKey": [], "paratope_sequence": [], "flanked_sequence": []}
+    pl.DataFrame(empty_data).write_csv("paratope-sequences.tsv", separator="\t")
 
 
 # --- Generate distance_to_centroid.tsv ---

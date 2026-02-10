@@ -13,6 +13,7 @@ import {
   createPlDataTableStateV2,
   createPlDataTableV2,
 } from '@platforma-sdk/model';
+import { getDefaultBlockLabel } from './label';
 
 export type BlockArgs = {
   defaultBlockLabel: string;
@@ -37,7 +38,7 @@ export type UiState = {
 export const model = BlockModel.create()
 
   .withArgs<BlockArgs>({
-    defaultBlockLabel: '',
+    defaultBlockLabel: getDefaultBlockLabel({}),
     customBlockLabel: '',
     paratopeThreshold: 0.5,
     identity: 0.8,
@@ -103,7 +104,7 @@ export const model = BlockModel.create()
 
     const isSingleCell = ctx.resultPool.getPColumnSpecByRef(ref)?.axesSpec[1].name === 'pl7.app/vdj/scClonotypeKey';
 
-    const requiredFeatures = ['CDR1', 'CDR2', 'CDR3', 'FR1', 'FR2', 'FR3', 'FR4'];
+    const requiredFeatures = ['CDR1', 'CDR2', 'CDR3', 'FR1', 'FR2', 'FR3'];
     for (const feature of requiredFeatures) {
       const matchers = isSingleCell
         ? [{
@@ -130,6 +131,36 @@ export const model = BlockModel.create()
       );
       if (!cols || cols.length === 0) return false;
     }
+
+    // FR4 can also be named FR4InFrame in some datasets
+    const fr4Variants = ['FR4', 'FR4InFrame'];
+    const hasFR4 = fr4Variants.some((feature) => {
+      const matchers = isSingleCell
+        ? [{
+            axes: [{ anchor: 'main', idx: 1 }],
+            name: 'pl7.app/vdj/sequence',
+            domain: {
+              'pl7.app/vdj/feature': feature,
+              'pl7.app/vdj/scClonotypeChain/index': 'primary',
+              'pl7.app/alphabet': 'aminoacid',
+            },
+          }]
+        : [{
+            axes: [{ anchor: 'main', idx: 1 }],
+            name: 'pl7.app/vdj/sequence',
+            domain: {
+              'pl7.app/vdj/feature': feature,
+              'pl7.app/alphabet': 'aminoacid',
+            },
+          }];
+      const cols = ctx.resultPool.getAnchoredPColumns(
+        { main: ref },
+        matchers,
+      );
+      return cols && cols.length > 0;
+    });
+    if (!hasFR4) return false;
+
     return true;
   })
 
@@ -254,3 +285,5 @@ export const model = BlockModel.create()
   ])
 
   .done(2);
+
+export { getDefaultBlockLabel } from './label';

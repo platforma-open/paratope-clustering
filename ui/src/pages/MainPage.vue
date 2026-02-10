@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { PlMultiSequenceAlignment } from '@milaboratories/multi-sequence-alignment';
+import strings from '@milaboratories/strings';
 import type { AxisId, PColumnIdAndSpec, PlRef, PlSelectionModel, PTableKey } from '@platforma-sdk/model';
 import {
   PlAccordionSection,
@@ -16,7 +17,7 @@ import {
   PlSlideModal,
   usePlDataTableSettingsV2,
 } from '@platforma-sdk/ui-vue';
-import { computed, reactive, ref, watch, watchEffect } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import { useApp } from '../app';
 
 const app = useApp();
@@ -68,30 +69,18 @@ const clusterAxis = computed<AxisId>(() => {
   if (app.model.outputs.clusterAbundanceSpec?.axesSpec[1] === undefined) {
     return {
       type: 'String',
-      name: 'pl7.app/vdj/paratopeClusterId',
+      name: 'pl7.app/vdj/clusterId',
       domain: {},
     };
   } else {
     return {
       type: 'String',
-      name: 'pl7.app/vdj/paratopeClusterId',
+      name: 'pl7.app/vdj/clusterId',
       domain: app.model.outputs.clusterAbundanceSpec?.axesSpec[1].domain,
     };
   }
 });
 
-watchEffect(() => {
-  const parts: string[] = [];
-  parts.push(
-    similarityTypeOptions
-      .find((o) => o.value === app.model.args.similarityType)
-      ?.label ?? '',
-  );
-  parts.push(`paratope:${app.model.args.paratopeThreshold}`);
-  parts.push(`ident:${app.model.args.identity}`);
-  parts.push(`cov:${app.model.args.coverageThreshold}`);
-  app.model.args.defaultBlockLabel = parts.filter(Boolean).join(', ');
-});
 </script>
 
 <template>
@@ -117,8 +106,8 @@ watchEffect(() => {
     <PlAgDataTableV2
       v-model="app.model.ui.tableState"
       :settings="tableSettings"
-      not-ready-text="Data is not computed"
-      no-rows-text="No data available"
+      :not-ready-text="strings.callToActions.configureSettingsAndRun"
+      :no-rows-text="strings.states.noDataAvailable"
       :show-cell-button-for-axis-id="clusterAxis"
       @cell-button-clicked="onRowDoubleClicked"
     />

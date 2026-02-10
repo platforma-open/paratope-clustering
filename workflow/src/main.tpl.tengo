@@ -22,12 +22,15 @@ setTableProps := func(spec, label, visibility, orderPriority) {
 	} else {
 		visibilityValue = visibility
 	}
+	ann := {
+		"pl7.app/label": label,
+		"pl7.app/table/visibility": visibilityValue
+	}
+	if !is_undefined(orderPriority) {
+		ann["pl7.app/table/orderPriority"] = orderPriority
+	}
 	return maps.deepMerge(spec, {
-		annotations: {
-			"pl7.app/label": label,
-			"pl7.app/table/visibility": visibilityValue,
-			"pl7.app/table/orderPriority": orderPriority
-		}
+		annotations: ann
 	})
 }
 
@@ -60,6 +63,16 @@ wf.prepare(func(args) {
 			}
 		}, feature)
 	}
+
+	// FR4 can also be named FR4InFrame in some datasets
+	bundleBuilder.addMulti({
+		axes: [{ anchor: "main", idx: 1 }],
+		name: "pl7.app/vdj/sequence",
+		domain: {
+			"pl7.app/vdj/feature": "FR4InFrame",
+			"pl7.app/alphabet": "aminoacid"
+		}
+	}, "FR4InFrame")
 
 	// Pull clonotype key labels
 	bundleBuilder.addMulti(
@@ -96,6 +109,17 @@ wf.body(func(args) {
 		}
 	}
 
+	// Fall back to FR4InFrame if FR4 has no columns
+	if len(featureColumns["FR4"]) == 0 {
+		fr4InFrame := columns.getColumns("FR4InFrame")
+		if len(fr4InFrame) > 0 {
+			featureColumns["FR4"] = fr4InFrame
+			if len(fr4InFrame) > numChains {
+				numChains = len(fr4InFrame)
+			}
+		}
+	}
+
 	// If no chains found, use at least 1
 	if numChains == 0 {
 		numChains = 1
@@ -103,7 +127,7 @@ wf.body(func(args) {
 
 	// Build the sequence table for parapred input
 	seqTableBuilder := pframes.tsvFileBuilder()
-	seqTableBuilder.mem("32GiB")
+	seqTableBuilder.mem("16GiB")
 	seqTableBuilder.cpu(4)
 	seqTableBuilder.setAxisHeader(datasetSpec.axesSpec[1].name, "clonotypeKey")
 
@@ -222,14 +246,14 @@ wf.body(func(args) {
 	isEmpty := clusteringAnalysis.output("isEmpty")
 
 	clusterIdAxisSpec := {
-		name: "pl7.app/vdj/paratopeClusterId",
+		name: "pl7.app/vdj/clusterId",
 		type: "String",
 		domain: maps.deepMerge(datasetSpec.axesSpec[1].domain, {
 			"pl7.app/vdj/clustering/algorithm": "mmseqs2-paratope",
 			"pl7.app/vdj/clustering/blockId": blockId
 		}),
 		annotations: {
-			"pl7.app/label": "Paratope Cluster Id",
+			"pl7.app/label": "Cluster Id",
 			"pl7.app/table/visibility": "default",
 			"pl7.app/table/orderPriority": "990000"
 		}
@@ -334,11 +358,11 @@ wf.body(func(args) {
 		columns: [{
 			column: "clusterLabel",
 			spec: setTableProps({
-				name: "pl7.app/vdj/paratopeClusterId",
+				name: "pl7.app/vdj/clusterId",
 				valueType: "String",
 				domain: clusterIdAxisSpec.domain,
 				annotations: clusterIdAxisSpec.annotations
-			}, "Paratope Cluster Id", "hidden", undefined)
+			}, "Cluster Id", "hidden", undefined)
 		}],
 		storageFormat: "Parquet",
 		partitionKeyLength: 0
@@ -382,7 +406,7 @@ wf.body(func(args) {
 			name: "pl7.app/label",
 			valueType: "String",
 			annotations: {
-				"pl7.app/label": "Paratope Cluster Id"
+				"pl7.app/label": "Cluster Id"
 			}
 		}
 	}]
@@ -410,16 +434,23 @@ wf.body(func(args) {
 		}
 	}
 
-	// Add paratope sequence column
+	// Add paratope sequence column (no pl7.app/sequence/paratope annotation here;
+	// that annotation is only on the per-clonotype column in the MSA p-frame)
 	seqColumns = append(seqColumns, {
 		column: "paratope_sequence",
 		spec: setTableProps({
 			name: "pl7.app/vdj/paratopeSequence",
-			valueType: "String",
-			annotations: {
-				"pl7.app/sequence/paratope": "true"
-			}
+			valueType: "String"
 		}, "Centroid Paratope", true, "3500")
+	})
+
+	// Add flanked (representative) sequence column
+	seqColumns = append(seqColumns, {
+		column: "flanked_sequence",
+		spec: setTableProps({
+			name: "pl7.app/vdj/representativeSequence",
+			valueType: "String"
+		}, "Representative Sequence", true, "3400")
 	})
 
 	clusterToSeqPf := xsv.importFile(clusteringAnalysis.output("clusterToSeq"), "tsv", {
@@ -480,7 +511,7 @@ wf.body(func(args) {
 		partitionKeyLength: 0
 	}, {splitDataAndSpec: true, cpu: defaultConvCpu, mem: defaultConvMem})
 
-	// Paratope annotation p-frame (per-clonotype paratope sequence)
+	// Paratope annotation p-frame (per-clonotype paratope + representative sequences)
 	paratopeAnnotationPf := xsv.importFile(clusteringAnalysis.output("paratopeSequences"), "tsv", {
 		axes: [{
 			column: "clonotypeKey",
@@ -495,20 +526,23 @@ wf.body(func(args) {
 					"pl7.app/sequence/paratope": "true"
 				}
 			}, "Paratope Sequence", false, undefined)
+		}, {
+			column: "flanked_sequence",
+			spec: setTableProps({
+				name: "pl7.app/vdj/representativeSequence",
+				valueType: "String"
+			}, "Representative Sequence", false, undefined)
 		}],
 		storageFormat: "Parquet",
 		partitionKeyLength: 0
 	}, {splitDataAndSpec: true, cpu: defaultConvCpu, mem: defaultConvMem})
 
 	// Build outputs & exports
-	traceLabel := args.customBlockLabel
-	if traceLabel == "" {
-		traceLabel = args.defaultBlockLabel
-	}
+	traceLabel := args.customBlockLabel || args.defaultBlockLabel
 	trace := pSpec.makeTrace(
 		abundanceSpec,
 		{
-			type: "milaboratories.paratope-clustering.clustering",
+			type: "milaboratories.clonotype-clustering.clustering",
 			importance: 30,
 			label: traceLabel
 		}
@@ -601,14 +635,18 @@ wf.body(func(args) {
 	bubblePlotPf := bubblePlotPfBuilder.build()
 
 	// Generate pFrames for MSA
+	// Only include paratope_sequence (the sequence column), linker, and distances
+	// flanked_sequence is excluded since it's not used as a sequence column in MSA
 	msaPf := pframes.pFrameBuilder()
 	i := 0
-	for pf in [paratopeAnnotationPf, cloneToClusterLinkPf, distancesPf] {
+	for pf in [cloneToClusterLinkPf, distancesPf] {
 		for k, v in pf {
 			msaPf.add(k + string(i), trace.inject(v.spec), v.data)
 			i = i + 1
 		}
 	}
+	// Add only the paratope_sequence column from paratopeAnnotationPf
+	msaPf.add("paratope_sequence" + string(i), trace.inject(paratopeAnnotationPf["paratope_sequence"].spec), paratopeAnnotationPf["paratope_sequence"].data)
 	msaPf = msaPf.build()
 
 	// Build export pFrame

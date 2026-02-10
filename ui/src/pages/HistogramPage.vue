@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import strings from '@milaboratories/strings';
 import type { PredefinedGraphOption } from '@milaboratories/graph-maker';
 import { GraphMaker } from '@milaboratories/graph-maker';
 import { PlBlockPage } from '@platforma-sdk/ui-vue';
@@ -36,6 +37,7 @@ const defaultOptions = computed((): PredefinedGraphOption<'histogram'>[] | undef
       :data-state-key="app.model.outputs.clustersPf"
       :p-frame="app.model.outputs.clustersPf"
       :default-options="defaultOptions"
+      :status-text="{ noPframe: { title: strings.callToActions.configureSettingsAndRun } }"
     />
   </PlBlockPage>
 </template>

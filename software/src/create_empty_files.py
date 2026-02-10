@@ -23,8 +23,8 @@ def main():
         "abundances.tsv", sep="\t", index=False
     )
 
-    # 2. cluster-to-seq.tsv: clusterId, clusterLabel, size, sequence_*, paratope_sequence
-    cluster_to_seq_cols = ["clusterId", "clusterLabel", "size"] + sequence_cols + ["paratope_sequence"]
+    # 2. cluster-to-seq.tsv: clusterId, clusterLabel, size, sequence_*, paratope_sequence, flanked_sequence
+    cluster_to_seq_cols = ["clusterId", "clusterLabel", "size"] + sequence_cols + ["paratope_sequence", "flanked_sequence"]
     pd.DataFrame(columns=cluster_to_seq_cols).to_csv(
         "cluster-to-seq.tsv", sep="\t", index=False
     )
@@ -64,8 +64,8 @@ def main():
         "abundances-top.tsv", sep="\t", index=False
     )
 
-    # 10. paratope-sequences.tsv: clonotypeKey, paratope_sequence
-    pd.DataFrame(columns=["clonotypeKey", "paratope_sequence"]).to_csv(
+    # 10. paratope-sequences.tsv: clonotypeKey, paratope_sequence, flanked_sequence
+    pd.DataFrame(columns=["clonotypeKey", "paratope_sequence", "flanked_sequence"]).to_csv(
         "paratope-sequences.tsv", sep="\t", index=False
     )
 

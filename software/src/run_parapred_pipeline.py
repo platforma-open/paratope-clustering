@@ -11,10 +11,16 @@ Output:
 
 import argparse
 import os
+import re
 import sys
+import time
 
 import pandas as pd
 import numpy as np
+
+# Standard amino acid letters accepted by Parapred's MEILER encoding
+_VALID_AA = set("ACDEFGHIKLMNPQRSTVWY")
+_INVALID_AA_RE = re.compile(r"[^ACDEFGHIKLMNPQRSTVWY]")
 
 try:
     import torch
@@ -55,9 +61,9 @@ def build_flanked_cdrs(row, cdr_cols, fr_cols):
     ]
 
     for left_fr, cdr, right_fr in flank_pairs:
-        left_seq = str(row.get(left_fr, "") or "")
-        cdr_seq = str(row.get(cdr, "") or "")
-        right_seq = str(row.get(right_fr, "") or "")
+        left_seq = _INVALID_AA_RE.sub("", str(row.get(left_fr, "") or ""))
+        cdr_seq = _INVALID_AA_RE.sub("", str(row.get(cdr, "") or ""))
+        right_seq = _INVALID_AA_RE.sub("", str(row.get(right_fr, "") or ""))
 
         if not cdr_seq:
             results.append(("", 0, 0))
@@ -75,13 +81,13 @@ def build_flanked_cdrs(row, cdr_cols, fr_cols):
     return results
 
 
-def predict_batch(model, flanked_sequences):
+def predict_batch(model, flanked_sequences, max_length=40):
     """
     Run Parapred on a list of flanked CDR sequences.
     Returns list of numpy arrays with per-residue probabilities.
-    Empty sequences get empty arrays.
+    Empty sequences get empty arrays. Sequences longer than max_length are skipped.
     """
-    valid = [(i, seq) for i, seq in enumerate(flanked_sequences) if seq]
+    valid = [(i, seq) for i, seq in enumerate(flanked_sequences) if seq and len(seq) <= max_length]
     results = [np.array([]) for _ in flanked_sequences]
 
     if not valid:
@@ -92,7 +98,7 @@ def predict_batch(model, flanked_sequences):
     indices_sorted = [v[0] for v in valid_sorted]
     seqs_sorted = [v[1] for v in valid_sorted]
 
-    encoded, lengths = encode_batch(seqs_sorted, max_length=40)
+    encoded, lengths = encode_batch(seqs_sorted, max_length=max_length)
     mask = generate_mask(encoded, lengths)
 
     with torch.no_grad():
@@ -135,7 +141,11 @@ def main():
     args = parser.parse_args()
 
     threshold = args.threshold
+    t_total = time.time()
+
+    t0 = time.time()
     df = pd.read_csv(args.input, sep="\t").fillna("")
+    print(f"[TIMING] Read input TSV ({len(df)} rows): {time.time() - t0:.2f}s")
 
     # Detect column naming: chain-indexed (CDR1_0, CDR1_1) or plain (CDR1, CDR2)
     chain_sets = []
@@ -159,10 +169,14 @@ def main():
         chain_sets.append(
             (["CDR1", "CDR2", "CDR3"], ["FR1", "FR2", "FR3", "FR4"])
         )
+    print(f"[TIMING] Detected {len(chain_sets)} chain(s)")
 
+    t0 = time.time()
     model = load_model()
+    print(f"[TIMING] Load Parapred model: {time.time() - t0:.2f}s")
 
     # Collect all flanked CDR sequences for batch prediction
+    t0 = time.time()
     all_entries = []  # (flanked_seq, cdr_seq, cdr_start, cdr_end)
     row_chain_cdr_map = {}  # (row_idx, chain_idx, cdr_idx) -> index in all_entries
 
@@ -172,7 +186,7 @@ def main():
             for cdr_idx, (flanked, cdr_start, cdr_end) in enumerate(flanked_cdrs):
                 idx = len(all_entries)
                 row_chain_cdr_map[(row_idx, chain_idx, cdr_idx)] = idx
-                cdr_seq = str(row.get(cdr_cols[cdr_idx], "") or "")
+                cdr_seq = _INVALID_AA_RE.sub("", str(row.get(cdr_cols[cdr_idx], "") or ""))
                 all_entries.append(
                     {
                         "flanked": flanked,
@@ -181,62 +195,119 @@ def main():
                         "cdr_end": cdr_end,
                     }
                 )
+    print(f"[TIMING] Build flanked CDRs ({len(all_entries)} entries): {time.time() - t0:.2f}s")
 
-    # Batch predict in chunks
-    BATCH_SIZE = 512
-    all_probs = [np.array([]) for _ in all_entries]
+    # Deduplicate flanked sequences — predict only unique ones
+    t0 = time.time()
     flanked_seqs = [item["flanked"] for item in all_entries]
+    unique_seqs = list(dict.fromkeys(s for s in flanked_seqs if s))  # preserves order
+    unique_probs = {}  # seq -> probs array
+    print(f"[TIMING] Dedup flanked sequences: {len(flanked_seqs)} total -> "
+          f"{len(unique_seqs)} unique ({100 * (1 - len(unique_seqs) / max(len(flanked_seqs), 1)):.1f}% reduction): "
+          f"{time.time() - t0:.2f}s")
 
-    for start in range(0, len(flanked_seqs), BATCH_SIZE):
-        end = min(start + BATCH_SIZE, len(flanked_seqs))
-        batch_probs = predict_batch(model, flanked_seqs[start:end])
+    # Batch predict unique sequences in chunks
+    BATCH_SIZE = 512
+    num_batches = (len(unique_seqs) + BATCH_SIZE - 1) // BATCH_SIZE
+
+    t0 = time.time()
+    for batch_num, start in enumerate(range(0, len(unique_seqs), BATCH_SIZE)):
+        end = min(start + BATCH_SIZE, len(unique_seqs))
+        t_batch = time.time()
+        batch_probs = predict_batch(model, unique_seqs[start:end])
         for i, probs in enumerate(batch_probs):
-            all_probs[start + i] = probs
+            unique_probs[unique_seqs[start + i]] = probs
+        if (batch_num + 1) % 50 == 0 or batch_num == num_batches - 1:
+            print(f"[TIMING]   Parapred batch {batch_num + 1}/{num_batches}: "
+                  f"{time.time() - t_batch:.2f}s (cumulative: {time.time() - t0:.2f}s)")
+    print(f"[TIMING] Parapred inference total ({num_batches} batches of {BATCH_SIZE}): {time.time() - t0:.2f}s")
+
+    # Map results back to all entries
+    empty_probs = np.array([])
+    all_probs = [unique_probs.get(s, empty_probs) for s in flanked_seqs]
 
     # Extract paratopes and build outputs
+    t0 = time.time()
     fasta_lines = []
     paratope_records = []
+    fallback_count = 0
 
     for row_idx, row in df.iterrows():
         clonotype_key = str(row["clonotypeKey"])
         all_paratope_parts = []
+        all_cdr_parts = []
+        all_flanked_parts = []
+        had_prediction_failure = False
 
         for chain_idx, (cdr_cols, _fr_cols) in enumerate(chain_sets):
             for cdr_idx in range(3):
                 idx = row_chain_cdr_map[(row_idx, chain_idx, cdr_idx)]
                 entry = all_entries[idx]
                 probs = all_probs[idx]
+                cdr_seq = entry["cdr_seq"]
+
+                # Track if prediction was skipped (too long or no probs)
+                if cdr_seq and len(probs) == 0:
+                    had_prediction_failure = True
+
                 paratope = extract_paratope(
-                    entry["cdr_seq"],
+                    cdr_seq,
                     probs,
                     entry["cdr_start"],
                     entry["cdr_end"],
                     threshold,
                 )
                 all_paratope_parts.append(paratope)
+                all_cdr_parts.append(cdr_seq)
+                all_flanked_parts.append(entry["flanked"])
 
-        paratope_sequence = "====".join(all_paratope_parts)
+        paratope_sequence = "".join(all_paratope_parts)
+        cdr_sequence = "".join(all_cdr_parts)
+        flanked_sequence = "".join(all_flanked_parts)
 
-        if paratope_sequence.replace("====", ""):
+        # Fall back to full CDR sequence when paratope extraction yields nothing
+        if not paratope_sequence and cdr_sequence:
+            paratope_sequence = cdr_sequence
+            fallback_count += 1
+            if had_prediction_failure:
+                print(f"WARNING: {clonotype_key}: CDR too long for Parapred, "
+                      f"falling back to full CDR sequence for clustering")
+            else:
+                print(f"WARNING: {clonotype_key}: no paratope residues above threshold "
+                      f"({threshold}), falling back to full CDR sequence for clustering")
+
+        if paratope_sequence:
             fasta_lines.append(f">s-{clonotype_key}")
             fasta_lines.append(paratope_sequence)
 
         paratope_records.append(
-            {"clonotypeKey": clonotype_key, "paratope_sequence": paratope_sequence}
+            {
+                "clonotypeKey": clonotype_key,
+                "paratope_sequence": paratope_sequence,
+                "flanked_sequence": flanked_sequence,
+            }
         )
+    print(f"[TIMING] Extract paratopes & build outputs: {time.time() - t0:.2f}s")
 
     # Write FASTA output
+    t0 = time.time()
     with open("output.fasta", "w") as f:
         f.write("\n".join(fasta_lines) + "\n" if fasta_lines else "")
+    print(f"[TIMING] Write FASTA ({len(fasta_lines) // 2} sequences): {time.time() - t0:.2f}s")
 
     # Write paratope sequences TSV
+    t0 = time.time()
     pd.DataFrame(paratope_records).to_csv(
         "paratope-sequences.tsv", sep="\t", index=False
     )
+    print(f"[TIMING] Write paratope-sequences TSV: {time.time() - t0:.2f}s")
 
     print(f"Processed {len(df)} clonotypes")
     print(f"Generated FASTA with {len(fasta_lines) // 2} sequences")
     print(f"Paratope threshold: {threshold}")
+    if fallback_count > 0:
+        print(f"WARNING: {fallback_count} clonotype(s) used full CDR sequence fallback")
+    print(f"[TIMING] Total pipeline: {time.time() - t_total:.2f}s")
 
 
 if __name__ == "__main__":

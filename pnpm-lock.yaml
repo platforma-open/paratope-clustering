@@ -15,6 +15,9 @@ catalogs:
     '@milaboratories/multi-sequence-alignment':
       specifier: 1.46.5
       version: 1.46.5
+    '@milaboratories/strings':
+      specifier: 0.1.0
+      version: 0.1.0
     '@milaboratories/ts-builder':
       specifier: 1.2.6
       version: 1.2.6
@@ -185,6 +188,9 @@ importers:
       '@milaboratories/multi-sequence-alignment':
         specifier: 'catalog:'
         version: 1.46.5(@platforma-sdk/model@1.53.14)(@platforma-sdk/ui-vue@1.53.14(sortablejs@1.15.6)(typescript@5.6.3))(d3-dispatch@3.0.1)(d3-path@3.1.0)(d3-scale-chromatic@3.1.0)(typescript@5.6.3)
+      '@milaboratories/strings':
+        specifier: 'catalog:'
+        version: 0.1.0
       '@platforma-open/MiLaboratories.paratope-clustering.model':
         specifier: workspace:*
         version: link:../model
@@ -1166,6 +1172,9 @@ packages:
 
   '@milaboratories/software-pframes-conv@2.2.9':
     resolution: {integrity: sha512-w+GaazDSqEgqYUJ38I5lgOsggyZJpcBVGvDMHIX1pyTdvPjWAOWu3mLkScaYuWeitFfh8aAedf5vrLqXtnX8bw==}
+
+  '@milaboratories/strings@0.1.0':
+    resolution: {integrity: sha512-cXRWVSzfoRW1a5CVU66vffVcekJn19cge3kReUc8o+SVPH0+I0QiVz5NhLplnZrhsEIJFYS3eSkeJ5fcgcvw9w==}
 
   '@milaboratories/tengo-tester@1.6.4':
     resolution: {integrity: sha512-0t//LejQwe8LuZtTbu4zUHk0/gIP3nZOoW6JJv//zTRH8Ybx+JGvE8rztesnTaqQeV2U9qzfXKNb51OZPYU1Vw==}
@@ -7763,6 +7772,8 @@ snapshots:
   '@milaboratories/resolve-helper@1.1.2': {}
 
   '@milaboratories/software-pframes-conv@2.2.9': {}
+
+  '@milaboratories/strings@0.1.0': {}
 
   '@milaboratories/tengo-tester@1.6.4': {}
 

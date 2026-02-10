@@ -20,7 +20,7 @@
           "toolset": "pip",
           "requirements": "requirements.txt"
         },
-        "root": "./src_python"
+        "root": "./src"
       },
       "py-parapred": {
         "type": "python",
@@ -30,7 +30,7 @@
           "toolset": "pip",
           "requirements": "requirements-parapred.txt"
         },
-        "root": "./src_python"
+        "root": "./src"
       }
     },
     "entrypoints": {
