@@ -1,0 +1,24 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --upgrade pip wheel setuptools
+
+COPY requirements-parapred.txt .
+
+# Install standard PyPI deps (everything except parapred-pytorch which isn't on PyPI)
+RUN grep -v parapred-pytorch requirements-parapred.txt > requirements-filtered.txt \
+    && pip install --no-cache-dir -r requirements-filtered.txt \
+    && rm requirements-filtered.txt
+
+# Install parapred-pytorch from source (--no-deps matches runenv config)
+RUN pip install --no-cache-dir --no-deps git+https://github.com/alchemab/parapred-pytorch.git@e0548be
+
+COPY . /app
+
+ENV PYTHONPATH=/app
+
+CMD ["bash"]

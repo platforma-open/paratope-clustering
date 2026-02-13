@@ -38,6 +38,14 @@
         "binary": {
           "artifact": "py-parapred",
           "cmd": ["python", "{pkg}/run_parapred_pipeline.py"]
+        },
+        "docker": {
+          "artifact": {
+            "type": "docker",
+            "context": "./src",
+            "dockerfile": "./src/Dockerfile-parapred"
+          },
+          "cmd": ["python", "/app/run_parapred_pipeline.py"]
         }
       },
       "process-results": {
