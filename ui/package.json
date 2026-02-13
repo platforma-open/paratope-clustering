@@ -1,5 +1,5 @@
 {
-  "name": "@platforma-open/MiLaboratories.paratope-clustering.ui",
+  "name": "@platforma-open/milaboratories.paratope-clustering.ui",
   "version": "1.0.0",
   "type": "module",
   "scripts": {
@@ -10,7 +10,7 @@
     "lint": "eslint ."
   },
   "dependencies": {
-    "@platforma-open/MiLaboratories.paratope-clustering.model": "workspace:*",
+    "@platforma-open/milaboratories.paratope-clustering.model": "workspace:*",
     "@platforma-sdk/ui-vue": "catalog:",
     "@platforma-sdk/model": "catalog:",
     "@milaboratories/graph-maker": "catalog:",

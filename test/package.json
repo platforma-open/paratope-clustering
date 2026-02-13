@@ -1,5 +1,5 @@
 {
-  "name": "@platforma-open/MiLaboratories.paratope-clustering.test",
+  "name": "@platforma-open/milaboratories.paratope-clustering.test",
   "private": true,
   "version": "1.0.0",
   "description": "Block tests",
@@ -12,7 +12,7 @@
   "files": [],
   "keywords": [],
   "dependencies": {
-    "this-block": "workspace:@platforma-open/MiLaboratories.paratope-clustering@*"
+    "this-block": "workspace:@platforma-open/milaboratories.paratope-clustering@*"
   },
   "devDependencies": {
     "@milaboratories/ts-builder": "catalog:",

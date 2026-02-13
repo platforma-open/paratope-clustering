@@ -1,5 +1,5 @@
 {
-  "name": "@platforma-open/MiLaboratories.paratope-clustering",
+  "name": "@platforma-open/milaboratories.paratope-clustering",
   "version": "1.0.0",
   "scripts": {
     "build": "shx rm -rf ./block-pack && block-tools pack",
@@ -12,15 +12,15 @@
     "index.js"
   ],
   "dependencies": {
-    "@platforma-open/MiLaboratories.paratope-clustering.workflow": "workspace:*",
-    "@platforma-open/MiLaboratories.paratope-clustering.model": "workspace:*",
-    "@platforma-open/MiLaboratories.paratope-clustering.ui": "workspace:*"
+    "@platforma-open/milaboratories.paratope-clustering.workflow": "workspace:*",
+    "@platforma-open/milaboratories.paratope-clustering.model": "workspace:*",
+    "@platforma-open/milaboratories.paratope-clustering.ui": "workspace:*"
   },
   "block": {
     "components": {
-      "workflow": "@platforma-open/MiLaboratories.paratope-clustering.workflow/dist/tengo/tpl/main.plj.gz",
-      "model": "@platforma-open/MiLaboratories.paratope-clustering.model/dist/model.json",
-      "ui": "@platforma-open/MiLaboratories.paratope-clustering.ui/dist"
+      "workflow": "@platforma-open/milaboratories.paratope-clustering.workflow/dist/tengo/tpl/main.plj.gz",
+      "model": "@platforma-open/milaboratories.paratope-clustering.model/dist/model.json",
+      "ui": "@platforma-open/milaboratories.paratope-clustering.ui/dist"
     },
     "meta": {
       "title": "Paratope clustering",

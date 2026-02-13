@@ -1,4 +1,4 @@
-import { getDefaultBlockLabel, model } from '@platforma-open/MiLaboratories.paratope-clustering.model';
+import { getDefaultBlockLabel, model } from '@platforma-open/milaboratories.paratope-clustering.model';
 import { defineApp } from '@platforma-sdk/ui-vue';
 import { watchEffect } from 'vue';
 import BubblePlotPage from './pages/BubblePlotPage.vue';

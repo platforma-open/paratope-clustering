@@ -3,9 +3,9 @@ ll := import("@platforma-sdk/workflow-tengo:ll")
 exec := import("@platforma-sdk/workflow-tengo:exec")
 assets := import("@platforma-sdk/workflow-tengo:assets")
 
-processResultsSw := assets.importSoftware("@platforma-open/MiLaboratories.paratope-clustering.software:process-results")
+processResultsSw := assets.importSoftware("@platforma-open/milaboratories.paratope-clustering.software:process-results")
 mmseqsSw := assets.importSoftware("@platforma-open/soedinglab.software-mmseqs2:main")
-createEmptyFilesSw := assets.importSoftware("@platforma-open/MiLaboratories.paratope-clustering.software:create-empty-files")
+createEmptyFilesSw := assets.importSoftware("@platforma-open/milaboratories.paratope-clustering.software:create-empty-files")
 
 self.validateInputs({
 	"__options__,closed": "",

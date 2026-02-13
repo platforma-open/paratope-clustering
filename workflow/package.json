@@ -1,5 +1,5 @@
 {
-  "name": "@platforma-open/MiLaboratories.paratope-clustering.workflow",
+  "name": "@platforma-open/milaboratories.paratope-clustering.workflow",
   "version": "1.0.0",
   "type": "module",
   "description": "Tengo-based template",
@@ -9,7 +9,7 @@
     "do-pack": "shx rm -f *.tgz && pnpm pack && shx mv *.tgz package.tgz"
   },
   "dependencies": {
-    "@platforma-open/MiLaboratories.paratope-clustering.software": "workspace:*",
+    "@platforma-open/milaboratories.paratope-clustering.software": "workspace:*",
     "@platforma-open/soedinglab.software-mmseqs2": "catalog:",
     "@platforma-sdk/workflow-tengo": "catalog:"
   },

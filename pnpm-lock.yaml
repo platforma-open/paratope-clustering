@@ -95,13 +95,13 @@ importers:
 
   block:
     dependencies:
-      '@platforma-open/MiLaboratories.paratope-clustering.model':
+      '@platforma-open/milaboratories.paratope-clustering.model':
         specifier: workspace:*
         version: link:../model
-      '@platforma-open/MiLaboratories.paratope-clustering.ui':
+      '@platforma-open/milaboratories.paratope-clustering.ui':
         specifier: workspace:*
         version: link:../ui
-      '@platforma-open/MiLaboratories.paratope-clustering.workflow':
+      '@platforma-open/milaboratories.paratope-clustering.workflow':
         specifier: workspace:*
         version: link:../workflow
     devDependencies:
@@ -155,7 +155,7 @@ importers:
   test:
     dependencies:
       this-block:
-        specifier: workspace:@platforma-open/MiLaboratories.paratope-clustering@*
+        specifier: workspace:@platforma-open/milaboratories.paratope-clustering@*
         version: link:../block
     devDependencies:
       '@milaboratories/ts-builder':
@@ -191,7 +191,7 @@ importers:
       '@milaboratories/strings':
         specifier: 'catalog:'
         version: 0.1.1
-      '@platforma-open/MiLaboratories.paratope-clustering.model':
+      '@platforma-open/milaboratories.paratope-clustering.model':
         specifier: workspace:*
         version: link:../model
       '@platforma-sdk/model':
@@ -225,7 +225,7 @@ importers:
 
   workflow:
     dependencies:
-      '@platforma-open/MiLaboratories.paratope-clustering.software':
+      '@platforma-open/milaboratories.paratope-clustering.software':
         specifier: workspace:*
         version: link:../software
       '@platforma-open/soedinglab.software-mmseqs2':
