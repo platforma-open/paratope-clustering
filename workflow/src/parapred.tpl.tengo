@@ -8,7 +8,9 @@ self.validateInputs({
 	"__options__,closed": "",
 	emptyOrNot: "any",
 	seqTable: "any",
-	paratopeThreshold: "number"
+	paratopeThreshold: "number",
+	"mem,?": "number",
+	"cpu,?": "number"
 })
 
 self.defineOutputs("fasta", "paratopeSequences", "probabilityDistribution")
@@ -22,10 +24,19 @@ self.body(func(inputs) {
 		}
 	}
 
+	mem := "16GiB"
+	cpu := 2
+	if !is_undefined(inputs.mem) {
+		mem = string(inputs.mem) + "GiB"
+	}
+	if !is_undefined(inputs.cpu) {
+		cpu = inputs.cpu
+	}
+
 	result := exec.builder().
 		software(parapredSw).
-		mem("32GiB").
-		cpu(4).
+		mem(mem).
+		cpu(cpu).
 		addFile("input.tsv", inputs.seqTable).
 		arg("--input").arg("input.tsv").
 		arg("--threshold").arg(string(inputs.paratopeThreshold)).

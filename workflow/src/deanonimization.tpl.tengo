@@ -39,7 +39,7 @@ self.body(func(args) {
 
 	deanonimizedTsv := args.clusteringResult
 	if !is_undefined(deanonimizedTsv) {
-		wf := pt.workflow().mem("8GiB").cpu(2)
+		wf := pt.workflow().mem("16GiB").cpu(2)
 
 		df := wf.frame(deanonimizedTsv, {
 			xsvType: "tsv",
