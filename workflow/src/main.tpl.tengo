@@ -1,0 +1,735 @@
+wf := import("@platforma-sdk/workflow-tengo:workflow")
+assets := import("@platforma-sdk/workflow-tengo:assets")
+xsv := import("@platforma-sdk/workflow-tengo:pframes.xsv")
+pframes := import("@platforma-sdk/workflow-tengo:pframes")
+maps := import("@platforma-sdk/workflow-tengo:maps")
+render := import("@platforma-sdk/workflow-tengo:render")
+pSpec := import("@platforma-sdk/workflow-tengo:pframes.spec")
+ll := import("@platforma-sdk/workflow-tengo:ll")
+
+text := import("text")
+
+clusteringTpl := assets.importTemplate(":clustering")
+emptyCheckTpl := assets.importTemplate(":empty-check")
+parapredTpl := assets.importTemplate(":parapred")
+deanonimizationTpl := assets.importTemplate(":deanonimization")
+anonymizationTpl := assets.importTemplate(":anonymization")
+
+setTableProps := func(spec, label, visibility, orderPriority) {
+	visibilityValue := ""
+	if visibility == true || visibility == false {
+		visibilityValue = visibility ? "default" : "optional"
+	} else {
+		visibilityValue = visibility
+	}
+	ann := {
+		"pl7.app/label": label,
+		"pl7.app/table/visibility": visibilityValue
+	}
+	if !is_undefined(orderPriority) {
+		ann["pl7.app/table/orderPriority"] = orderPriority
+	}
+	return maps.deepMerge(spec, {
+		annotations: ann
+	})
+}
+
+// CDR and FR features to query from the dataset
+allFeatures := ["FR1", "CDR1", "FR2", "CDR2", "FR3", "CDR3", "FR4"]
+
+wf.prepare(func(args) {
+	bundleBuilder := wf.createPBundleBuilder()
+	bundleBuilder.ignoreMissingDomains()
+	bundleBuilder.addAnchor("main", args.datasetRef)
+
+	// abundance
+	bundleBuilder.addSingle({
+		axes: [{ anchor: "main", idx: 0 }, { anchor: "main", idx: 1 }],
+		annotations: {
+			"pl7.app/isAbundance": "true",
+			"pl7.app/abundance/normalized": "false",
+			"pl7.app/abundance/isPrimary": "true"
+		}
+	}, "abundance")
+
+	// Pull CDR and FR amino acid sequence columns
+	for feature in allFeatures {
+		bundleBuilder.addMulti({
+			axes: [{ anchor: "main", idx: 1 }],
+			name: "pl7.app/vdj/sequence",
+			domain: {
+				"pl7.app/vdj/feature": feature,
+				"pl7.app/alphabet": "aminoacid"
+			}
+		}, feature)
+	}
+
+	// FR4 can also be named FR4InFrame in some datasets
+	bundleBuilder.addMulti({
+		axes: [{ anchor: "main", idx: 1 }],
+		name: "pl7.app/vdj/sequence",
+		domain: {
+			"pl7.app/vdj/feature": "FR4InFrame",
+			"pl7.app/alphabet": "aminoacid"
+		}
+	}, "FR4InFrame")
+
+	// Pull clonotype key labels
+	bundleBuilder.addMulti(
+		{
+			axes: [{ anchor: "main", idx: 1 }],
+			name: "pl7.app/label"
+		}, "clonotypeKeyLabels")
+
+	return {
+		columns: bundleBuilder.build()
+	}
+})
+
+wf.body(func(args) {
+	blockId := wf.blockId().getDataAsJson()
+
+	columns := args.columns
+	datasetSpec := columns.getSpec(args.datasetRef)
+	abundanceSpec := columns.getSpec("abundance")
+
+	isSingleCell := datasetSpec.axesSpec[1].name == "pl7.app/vdj/scClonotypeKey"
+	defaultConvMem := "16GiB"
+	defaultConvCpu := 1
+	if !is_undefined(args.mem) {
+		defaultConvMem = string(args.mem) + "GiB"
+	}
+	if !is_undefined(args.cpu) {
+		defaultConvCpu = args.cpu
+	}
+
+	// Build input table with CDR/FR columns for parapred
+	// Detect available chains by checking which columns were returned
+	featureColumns := {}
+	numChains := 0
+	for feature in allFeatures {
+		featureCols := columns.getColumns(feature)
+		featureColumns[feature] = featureCols
+		if len(featureCols) > numChains {
+			numChains = len(featureCols)
+		}
+	}
+
+	// Fall back to FR4InFrame if FR4 has no columns
+	if len(featureColumns["FR4"]) == 0 {
+		fr4InFrame := columns.getColumns("FR4InFrame")
+		if len(fr4InFrame) > 0 {
+			featureColumns["FR4"] = fr4InFrame
+			if len(fr4InFrame) > numChains {
+				numChains = len(fr4InFrame)
+			}
+		}
+	}
+
+	// If no chains found, use at least 1
+	if numChains == 0 {
+		numChains = 1
+	}
+
+	// Build the sequence table for parapred input
+	seqTableBuilder := pframes.tsvFileBuilder()
+	seqTableBuilder.mem(defaultConvMem)
+	seqTableBuilder.cpu(defaultConvCpu)
+	seqTableBuilder.setAxisHeader(datasetSpec.axesSpec[1].name, "clonotypeKey")
+
+	// Track sequence columns added (for numbering)
+	seqColIndex := 0
+
+	if numChains > 1 {
+		// Multi-chain: name columns as CDR1_0, CDR1_1, etc.
+		for chainIdx := 0; chainIdx < numChains; chainIdx++ {
+			for feature in allFeatures {
+				featureCols := featureColumns[feature]
+				if chainIdx < len(featureCols) {
+					seqTableBuilder.add(featureCols[chainIdx], {header: feature + "_" + string(chainIdx)})
+				}
+			}
+		}
+	} else {
+		// Single chain: name columns as CDR1, CDR2, etc.
+		for feature in allFeatures {
+			featureCols := featureColumns[feature]
+			if len(featureCols) > 0 {
+				seqTableBuilder.add(featureCols[0], {header: feature})
+			}
+		}
+	}
+
+	// Track sequence refs for centroid output columns
+	sequenceRefs := []
+	seqColIndex = 0
+	for feature in allFeatures {
+		featureCols := featureColumns[feature]
+		for chainIdx := 0; chainIdx < len(featureCols); chainIdx++ {
+			sequenceRefs = append(sequenceRefs, {feature: feature, chainIdx: chainIdx, seqIdx: seqColIndex})
+			seqColIndex = seqColIndex + 1
+		}
+	}
+	numSequences := seqColIndex
+
+	seqTable := seqTableBuilder.build()
+
+	// Check if input pcols are empty
+	emptyCheckAnalysis := render.create(emptyCheckTpl, {
+		seqTable: seqTable
+	})
+	emptyOrNot := emptyCheckAnalysis.output("emptyResult")
+
+	// Anonymize sampleId axis
+	abundanceColumn := columns.getColumn("abundance")
+	anonymizationResult := render.create(anonymizationTpl, {
+		data: abundanceColumn.data,
+		pKeyIndices: [0]
+	})
+	anonymizedAbundanceData := anonymizationResult.output("anonymizedData")
+	mappingRef := anonymizationResult.output("mapping")
+
+	// Build clone table (includes abundance + sequences + labels)
+	cloneTableBuilder := pframes.tsvFileBuilder()
+	cloneTableBuilder.add({ spec: abundanceColumn.spec, data: anonymizedAbundanceData }, {header: "abundance"})
+
+	// Add all sequence columns
+	seqColIndex2 := 0
+	for feature in allFeatures {
+		featureCols := featureColumns[feature]
+		for chainIdx := 0; chainIdx < len(featureCols); chainIdx++ {
+			cloneTableBuilder.add(featureCols[chainIdx], {header: "sequence_" + string(seqColIndex2)})
+			seqColIndex2 = seqColIndex2 + 1
+		}
+	}
+
+	// Get clonotype key labels
+	clonotypeKeyLabelsArray := columns.getColumns("clonotypeKeyLabels")
+	if len(clonotypeKeyLabelsArray) > 0 {
+		cloneTableBuilder.add(clonotypeKeyLabelsArray[0], {header: "clonotypeKeyLabel"})
+	} else {
+		ll.panic("No clonotype key label columns found")
+	}
+
+	cloneTableBuilder.setAxisHeader(abundanceSpec.axesSpec[0].name, "sampleId")
+	cloneTableBuilder.setAxisHeader(abundanceSpec.axesSpec[1].name, "clonotypeKey")
+	cloneTableBuilder.mem(defaultConvMem)
+	cloneTableBuilder.cpu(defaultConvCpu)
+	cloneTable := cloneTableBuilder.build()
+
+	// Run Parapred pipeline
+	parapredAnalysis := render.create(parapredTpl, {
+		emptyOrNot: emptyOrNot,
+		seqTable: seqTable,
+		paratopeThreshold: args.paratopeThreshold
+	}, {
+		metaInputs: {
+			mem: args.mem,
+			cpu: args.cpu
+		}
+	})
+
+	fasta := parapredAnalysis.output("fasta")
+	paratopeSequences := parapredAnalysis.output("paratopeSequences")
+	probabilityDistribution := parapredAnalysis.output("probabilityDistribution")
+
+	// Run clustering
+	clusteringAnalysis := render.create(clusteringTpl, {
+		emptyOrNot: emptyOrNot,
+		fasta: fasta,
+		paratopeSequences: paratopeSequences,
+		cloneTable: cloneTable,
+		isSingleCell: isSingleCell,
+		identity: args.identity,
+		similarityType: args.similarityType,
+		coverageThreshold: args.coverageThreshold,
+		coverageMode: args.coverageMode,
+		numSequences: numSequences
+	}, {
+		metaInputs: {
+			mem: args.mem,
+			cpu: args.cpu
+		}
+	})
+
+	// Gather results
+	mmseqs := clusteringAnalysis.output("mmseqs")
+	mmseqsOutput := clusteringAnalysis.output("mmseqsOutput")
+	isEmpty := clusteringAnalysis.output("isEmpty")
+
+	clusterIdAxisSpec := {
+		name: "pl7.app/vdj/clusterId",
+		type: "String",
+		domain: maps.deepMerge(datasetSpec.axesSpec[1].domain, {
+			"pl7.app/vdj/clustering/algorithm": "mmseqs2-paratope",
+			"pl7.app/vdj/clustering/blockId": blockId
+		}),
+		annotations: {
+			"pl7.app/label": "Cluster Id",
+			"pl7.app/table/visibility": "default",
+			"pl7.app/table/orderPriority": "990000"
+		}
+	}
+
+	ac := {
+		name: abundanceSpec.name,
+		valueType: abundanceSpec.valueType,
+		domain: abundanceSpec.domain,
+		annotations: abundanceSpec.annotations
+	}
+
+	abundanceLabel := abundanceSpec.annotations["pl7.app/label"]
+
+	// De-anonymize abundance TSVs
+	abundancesDeanonimization := render.createEphemeral(
+		deanonimizationTpl,
+		{
+			mapping: mappingRef,
+			clusteringResult: clusteringAnalysis.output("abundances")
+		}
+	)
+	deanonimizedAbundancesTsv := abundancesDeanonimization.output("deanonimizedTsv")
+
+	abundancesPf := xsv.importFile(deanonimizedAbundancesTsv, "tsv", {
+		axes: [{
+			column: "sampleId",
+			spec: abundanceSpec.axesSpec[0]
+		}, {
+			column: "clusterId",
+			spec: clusterIdAxisSpec
+		}],
+		columns: [{
+			column: "abundance",
+			spec: setTableProps(ac, abundanceLabel + " in Cluster", false, undefined)
+		}, {
+			column: "abundance_normalized",
+			spec: setTableProps(maps.deepMerge(ac, {
+				valueType: "Float",
+				annotations: {
+					"pl7.app/abundance/normalized": "true"
+				}
+			}), text.re_replace("Number", abundanceLabel, "Fraction") + " in Cluster", false, undefined)
+		}],
+		storageFormat: "Parquet",
+		partitionKeyLength: 1
+	}, {splitDataAndSpec: true, cpu: defaultConvCpu, mem: defaultConvMem})
+
+	abundancesPerClusterPf := xsv.importFile(clusteringAnalysis.output("abundancesPerCluster"), "tsv", {
+		axes: [{
+			column: "clusterId",
+			spec: clusterIdAxisSpec
+		}],
+		columns: [{
+			column: "abundance_per_cluster",
+			spec: setTableProps(ac, "Total " + abundanceLabel + " in Cluster", true, "2000")
+		}, {
+			column: "abundance_fraction_per_cluster",
+			spec: func() {
+				fractionName := "pl7.app/vdj/readFraction"
+				abundanceUnit := "reads"
+				if text.contains(ac.name, "uniqueMoleculeCount") {
+					fractionName = "pl7.app/vdj/uniqueMoleculeFraction"
+					abundanceUnit = "molecules"
+				} else if text.contains(ac.name, "readCount") {
+					fractionName = "pl7.app/vdj/readFraction"
+					abundanceUnit = "reads"
+				}
+
+				abundanceFractionSpec := maps.deepMerge(ac, {
+					name: fractionName,
+					valueType: "Float",
+					annotations: {
+						"pl7.app/abundance/isPrimary": "true",
+						"pl7.app/abundance/normalized": "true",
+						"pl7.app/abundance/unit": abundanceUnit,
+						"pl7.app/format": ".2p",
+						"pl7.app/isAbundance": "true",
+						"pl7.app/max": "1",
+						"pl7.app/min": "0",
+						"pl7.app/isAnchor": undefined
+					}
+				})
+				fractionLabel := text.title(text.re_replace("number of ", text.to_lower(abundanceLabel), ""))
+				fractionLabel = text.re_replace("Umis", fractionLabel, "UMIs")
+				resultSpec := setTableProps(abundanceFractionSpec, "Total " + fractionLabel + " Fraction in Cluster", true, "1")
+				resultSpec.annotations = maps.filter(resultSpec.annotations, func(k, v) {
+					return k != "pl7.app/isAnchor"
+				})
+				return resultSpec
+			}()
+		}],
+		storageFormat: "Parquet",
+		partitionKeyLength: 0
+	}, {splitDataAndSpec: true, cpu: defaultConvCpu, mem: defaultConvMem})
+
+	cloneToClusterPf := xsv.importFile(clusteringAnalysis.output("cloneToCluster"), "tsv", {
+		axes: [{
+			column: "clonotypeKey",
+			spec: datasetSpec.axesSpec[1]
+		}],
+		columns: [{
+			column: "clusterLabel",
+			spec: setTableProps({
+				name: "pl7.app/vdj/clusterId",
+				valueType: "String",
+				domain: clusterIdAxisSpec.domain,
+				annotations: clusterIdAxisSpec.annotations
+			}, "Cluster Id", "hidden", undefined)
+		}],
+		storageFormat: "Parquet",
+		partitionKeyLength: 0
+	}, {splitDataAndSpec: true, cpu: defaultConvCpu, mem: defaultConvMem})
+
+	cloneToClusterLinkPf := xsv.importFile(clusteringAnalysis.output("cloneToCluster"), "tsv", {
+		axes: [{
+			column: "clonotypeKey",
+			spec: datasetSpec.axesSpec[1]
+		}, {
+			column: "clusterId",
+			spec: clusterIdAxisSpec
+		}],
+		columns: [{
+			column: "link",
+			spec: setTableProps({
+				name: "pl7.app/vdj/link",
+				valueType: "Int",
+				annotations: {
+					"pl7.app/isLinkerColumn": "true"
+				}
+			}, "Clone to cluster link", "hidden", undefined)
+		}],
+		storageFormat: "Parquet",
+		partitionKeyLength: 0
+	}, {splitDataAndSpec: true, cpu: defaultConvCpu, mem: defaultConvMem})
+
+	// Build sequence columns for cluster-to-seq
+	seqColumns := [{
+		column: "size",
+		spec: setTableProps({
+			name: "pl7.app/vdj/clustering/clusterSize",
+			valueType: "Int",
+			annotations: {
+				"pl7.app/label": "Cluster Size"
+			}
+		}, "Cluster Size", true, "3000")
+	}, {
+		column: "clusterLabel",
+		spec: {
+			name: "pl7.app/label",
+			valueType: "String",
+			annotations: {
+				"pl7.app/label": "Cluster Id"
+			}
+		}
+	}]
+
+	// Add original sequence columns from the centroid
+	for ref in sequenceRefs {
+		featureCols := featureColumns[ref.feature]
+		if ref.chainIdx < len(featureCols) {
+			spec := maps.clone(featureCols[ref.chainIdx].spec)
+			spec.annotations["pl7.app/label"] = "Representative " + spec.annotations["pl7.app/label"]
+
+			delete(spec.annotations, "pl7.app/vdj/imputed")
+			delete(spec.annotations, "pl7.app/vdj/isAssemblingFeature")
+			delete(spec.annotations, "pl7.app/vdj/isMainSequence")
+
+			seqColumns = append(seqColumns, {
+				column: "sequence_" + string(ref.seqIdx),
+				spec: setTableProps({
+					name: spec.name,
+					valueType: spec.valueType,
+					domain: spec.domain,
+					annotations: spec.annotations
+				}, spec.annotations["pl7.app/label"], true, "4000")
+			})
+		}
+	}
+
+	// Add paratope sequence column (no pl7.app/sequence/paratope annotation here;
+	// that annotation is only on the per-clonotype column in the MSA p-frame)
+	seqColumns = append(seqColumns, {
+		column: "paratope_sequence",
+		spec: setTableProps({
+			name: "pl7.app/vdj/paratopeSequence",
+			valueType: "String"
+		}, "Representative Paratope", true, "3500")
+	})
+
+	// Add flanked (representative) sequence column
+	seqColumns = append(seqColumns, {
+		column: "flanked_sequence",
+		spec: setTableProps({
+			name: "pl7.app/vdj/representativeSequence",
+			valueType: "String"
+		}, "Representative Sequence", true, "3400")
+	})
+
+	clusterToSeqPf := xsv.importFile(clusteringAnalysis.output("clusterToSeq"), "tsv", {
+		axes: [{
+			column: "clusterId",
+			spec: clusterIdAxisSpec
+		}],
+		columns: seqColumns,
+		storageFormat: "Parquet",
+		partitionKeyLength: 0
+	}, {splitDataAndSpec: true, cpu: defaultConvCpu, mem: defaultConvMem})
+
+	distancesPf := xsv.importFile(clusteringAnalysis.output("distanceToCentroid"), "tsv", {
+		axes: [{
+			column: "clonotypeKey",
+			spec: datasetSpec.axesSpec[1]
+		}],
+		columns: [{
+			column: "distanceToCentroid",
+			spec: setTableProps({
+				name: "pl7.app/vdj/distanceToCentroid",
+				valueType: "Float",
+				domain: {
+					"pl7.app/vdj/clustering/algorithm": "mmseqs2-paratope",
+					"pl7.app/vdj/clustering/blockId": blockId
+				},
+				annotations: {
+					"pl7.app/min": "0",
+					"pl7.app/max": "1",
+					"pl7.app/rankingOrder": "decreasing",
+					"pl7.app/format": ".2f"
+				}
+			}, "Distance to centroid", false, undefined)
+		}],
+		storageFormat: "Parquet",
+		partitionKeyLength: 0
+	}, {splitDataAndSpec: true, cpu: defaultConvCpu, mem: defaultConvMem})
+
+	clusterRadiusPf := xsv.importFile(clusteringAnalysis.output("clusterRadius"), "tsv", {
+		axes: [{
+			column: "clusterId",
+			spec: clusterIdAxisSpec
+		}],
+		columns: [{
+			column: "clusterRadius",
+			spec: setTableProps({
+				name: "pl7.app/vdj/clustering/clusterRadius",
+				valueType: "Float",
+				annotations: {
+					"pl7.app/rankingOrder": "decreasing",
+					"pl7.app/min": "0",
+					"pl7.app/max": "1",
+					"pl7.app/format": ".2f"
+				}
+			}, "Cluster radius", true, "2900")
+		}],
+		storageFormat: "Parquet",
+		partitionKeyLength: 0
+	}, {splitDataAndSpec: true, cpu: defaultConvCpu, mem: defaultConvMem})
+
+	// Paratope annotation p-frame (per-clonotype paratope + representative sequences)
+	paratopeAnnotationPf := xsv.importFile(clusteringAnalysis.output("paratopeSequences"), "tsv", {
+		axes: [{
+			column: "clonotypeKey",
+			spec: datasetSpec.axesSpec[1]
+		}],
+		columns: [{
+			column: "paratope_sequence",
+			spec: setTableProps({
+				name: "pl7.app/vdj/paratopeSequence",
+				valueType: "String",
+				annotations: {
+					"pl7.app/sequence/paratope": "true"
+				}
+			}, "Paratope Sequence", false, undefined)
+		}, {
+			column: "flanked_sequence",
+			spec: setTableProps({
+				name: "pl7.app/vdj/representativeSequence",
+				valueType: "String"
+			}, "Representative Sequence", false, undefined)
+		}],
+		storageFormat: "Parquet",
+		partitionKeyLength: 0
+	}, {splitDataAndSpec: true, cpu: defaultConvCpu, mem: defaultConvMem})
+
+	// Probability distribution p-frame
+	probDistImported := xsv.importFile(probabilityDistribution, "tsv", {
+		axes: [{
+			column: "probabilityBin",
+			spec: {
+				name: "pl7.app/parapred/probabilityBin",
+				type: "String",
+				annotations: {
+					"pl7.app/label": "Probability Bin"
+				}
+			}
+		}],
+		columns: [{
+			column: "residueCount",
+			spec: {
+				name: "pl7.app/parapred/residueCount",
+				valueType: "Int",
+				annotations: {
+					"pl7.app/label": "Residue Count"
+				}
+			}
+		}],
+		storageFormat: "Parquet",
+		partitionKeyLength: 0
+	}, {splitDataAndSpec: true, cpu: defaultConvCpu, mem: defaultConvMem})
+
+	probDistPfBuilder := pframes.pFrameBuilder()
+	for k, v in probDistImported {
+		probDistPfBuilder.add(k, v.spec, v.data)
+	}
+	probDistPf := probDistPfBuilder.build()
+
+	// Build outputs & exports
+	traceLabel := args.customBlockLabel || args.defaultBlockLabel
+	trace := pSpec.makeTrace(
+		abundanceSpec,
+		{
+			type: "milaboratories.clonotype-clustering.clustering",
+			importance: 30,
+			label: traceLabel
+		}
+	)
+
+	// Build output pFrame for block table
+	opf := pframes.pFrameBuilder()
+	for pf in [clusterToSeqPf, clusterRadiusPf, abundancesPerClusterPf] {
+		for k, v in pf {
+			if k == "clusterLabel" {
+				continue
+			}
+			opf.add(k, trace.inject(v.spec), v.data)
+		}
+	}
+	opf = opf.build()
+
+	// Generate pFrames for bubble plot with top clusters
+	abundancesTopDeanonimization := render.createEphemeral(
+		deanonimizationTpl,
+		{
+			mapping: mappingRef,
+			clusteringResult: clusteringAnalysis.output("abundancesTop")
+		}
+	)
+	deanonimizedAbundancesTopTsv := abundancesTopDeanonimization.output("deanonimizedTsv")
+
+	abundancesTopPf := xsv.importFile(deanonimizedAbundancesTopTsv, "tsv", {
+		axes: [{
+			column: "sampleId",
+			spec: abundanceSpec.axesSpec[0]
+		}, {
+			column: "clusterId",
+			spec: clusterIdAxisSpec
+		}],
+		columns: [{
+			column: "abundance",
+			spec: setTableProps(ac, abundanceLabel + " in Cluster", false, undefined)
+		}, {
+			column: "abundance_normalized",
+			spec: setTableProps(maps.deepMerge(ac, {
+				valueType: "Float",
+				annotations: {
+					"pl7.app/abundance/normalized": "true"
+				}
+			}), text.re_replace("Number", abundanceLabel, "Fraction") + " in Cluster", false, undefined)
+		}],
+		storageFormat: "Parquet",
+		partitionKeyLength: 1
+	}, {splitDataAndSpec: true, cpu: defaultConvCpu, mem: defaultConvMem})
+
+	clusterToSeqTopPf := xsv.importFile(clusteringAnalysis.output("clusterToSeqTop"), "tsv", {
+		axes: [{
+			column: "clusterId",
+			spec: clusterIdAxisSpec
+		}],
+		columns: seqColumns,
+		storageFormat: "Parquet",
+		partitionKeyLength: 0
+	}, {splitDataAndSpec: true, cpu: defaultConvCpu, mem: defaultConvMem})
+
+	clusterRadiusTopPf := xsv.importFile(clusteringAnalysis.output("clusterRadiusTop"), "tsv", {
+		axes: [{
+			column: "clusterId",
+			spec: clusterIdAxisSpec
+		}],
+		columns: [{
+			column: "clusterRadius",
+			spec: setTableProps({
+				name: "pl7.app/vdj/clustering/clusterRadius",
+				valueType: "Float",
+				annotations: {
+					"pl7.app/rankingOrder": "decreasing",
+					"pl7.app/min": "0",
+					"pl7.app/max": "1",
+					"pl7.app/format": ".2f"
+				}
+			}, "Cluster radius", true, undefined)
+		}],
+		storageFormat: "Parquet",
+		partitionKeyLength: 0
+	}, {splitDataAndSpec: true, cpu: defaultConvCpu, mem: defaultConvMem})
+
+	bubblePlotPfBuilder := pframes.pFrameBuilder()
+	for pf in [abundancesTopPf, clusterToSeqTopPf, clusterRadiusTopPf] {
+		for k, v in pf {
+			bubblePlotPfBuilder.add(k, trace.inject(v.spec), v.data)
+		}
+	}
+	bubblePlotPf := bubblePlotPfBuilder.build()
+
+	// Generate pFrames for MSA
+	// Only include paratope_sequence (the sequence column), linker, and distances
+	// flanked_sequence is excluded since it's not used as a sequence column in MSA
+	msaPf := pframes.pFrameBuilder()
+	i := 0
+	for pf in [cloneToClusterLinkPf, distancesPf] {
+		for k, v in pf {
+			msaPf.add(k + string(i), trace.inject(v.spec), v.data)
+			i = i + 1
+		}
+	}
+	// Add only the paratope_sequence column from paratopeAnnotationPf
+	msaPf.add("paratope_sequence" + string(i), trace.inject(paratopeAnnotationPf["paratope_sequence"].spec), paratopeAnnotationPf["paratope_sequence"].data)
+	msaPf = msaPf.build()
+
+	// Build export pFrame
+	epf := pframes.pFrameBuilder()
+	i = 0
+	for pf in [abundancesPf, cloneToClusterPf, cloneToClusterLinkPf, clusterToSeqPf, abundancesPerClusterPf, distancesPf, clusterRadiusPf, paratopeAnnotationPf] {
+		for k, v in pf {
+			epf.add(k + string(i), trace.inject(v.spec), v.data)
+			i = i + 1
+		}
+	}
+	epf = epf.build()
+
+	clusterAbundanceSpec := trace.inject(abundancesPf["abundance"].spec)
+
+	return {
+		outputs: {
+			clustersPf: pframes.exportFrame(opf),
+			bubblePlotPf: pframes.exportFrame(bubblePlotPf),
+			msaPf: pframes.exportFrame(msaPf),
+			pf: pframes.exportFrame(epf),
+			clusterAbundanceSpec: clusterAbundanceSpec,
+			mmseqs: mmseqs,
+			mmseqsOutput: mmseqsOutput,
+			abundances: clusteringAnalysis.output("abundances"),
+			clusterToSeq: clusteringAnalysis.output("clusterToSeq"),
+			cloneToCluster: clusteringAnalysis.output("cloneToCluster"),
+			abundancesPerCluster: clusteringAnalysis.output("abundancesPerCluster"),
+			distanceToCentroid: clusteringAnalysis.output("distanceToCentroid"),
+			clusterRadius: clusteringAnalysis.output("clusterRadius"),
+			clusterToSeqTop: clusteringAnalysis.output("clusterToSeqTop"),
+			clusterRadiusTop: clusteringAnalysis.output("clusterRadiusTop"),
+			abundancesTop: clusteringAnalysis.output("abundancesTop"),
+			paratopeSequences: clusteringAnalysis.output("paratopeSequences"),
+			isEmpty: isEmpty,
+			probDistPf: pframes.exportFrame(probDistPf)
+		},
+		exports: {
+			pf: epf
+		}
+	}
+})

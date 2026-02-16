@@ -1,0 +1,53 @@
+self := import("@platforma-sdk/workflow-tengo:tpl")
+exec := import("@platforma-sdk/workflow-tengo:exec")
+assets := import("@platforma-sdk/workflow-tengo:assets")
+
+parapredSw := assets.importSoftware("@platforma-open/milaboratories.paratope-clustering.software:run-parapred-pipeline")
+
+self.validateInputs({
+	"__options__,closed": "",
+	emptyOrNot: "any",
+	seqTable: "any",
+	paratopeThreshold: "number",
+	"mem,?": "number",
+	"cpu,?": "number"
+})
+
+self.defineOutputs("fasta", "paratopeSequences", "probabilityDistribution")
+
+self.body(func(inputs) {
+	if string(inputs.emptyOrNot.getData()) == "empty" {
+		return {
+			fasta: {},
+			paratopeSequences: {},
+			probabilityDistribution: {}
+		}
+	}
+
+	mem := "16GiB"
+	cpu := 2
+	if !is_undefined(inputs.mem) {
+		mem = string(inputs.mem) + "GiB"
+	}
+	if !is_undefined(inputs.cpu) {
+		cpu = inputs.cpu
+	}
+
+	result := exec.builder().
+		software(parapredSw).
+		mem(mem).
+		cpu(cpu).
+		addFile("input.tsv", inputs.seqTable).
+		arg("--input").arg("input.tsv").
+		arg("--threshold").arg(string(inputs.paratopeThreshold)).
+		saveFile("output.fasta").
+		saveFile("paratope-sequences.tsv").
+		saveFile("probability-distribution.tsv").
+		run()
+
+	return {
+		fasta: result.getFile("output.fasta"),
+		paratopeSequences: result.getFile("paratope-sequences.tsv"),
+		probabilityDistribution: result.getFile("probability-distribution.tsv")
+	}
+})

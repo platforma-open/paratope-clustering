@@ -1,0 +1,291 @@
+import type { GraphMakerState } from '@milaboratories/graph-maker';
+import type {
+  PColumnIdAndSpec,
+  PColumnSpec,
+  PFrameHandle,
+  PlDataTableStateV2,
+  PlMultiSequenceAlignmentModel,
+  PlRef,
+} from '@platforma-sdk/model';
+import {
+  BlockModel,
+  createPFrameForGraphs,
+  createPlDataTableStateV2,
+  createPlDataTableV2,
+} from '@platforma-sdk/model';
+import { getDefaultBlockLabel } from './label';
+
+export type BlockArgs = {
+  defaultBlockLabel: string;
+  customBlockLabel: string;
+  datasetRef?: PlRef;
+  paratopeThreshold: number;
+  identity: number;
+  similarityType: 'alignment-score' | 'sequence-identity';
+  coverageThreshold: number;
+  coverageMode: 0 | 1 | 2 | 3 | 4 | 5;
+  mem?: number;
+  cpu?: number;
+};
+
+export type UiState = {
+  tableState: PlDataTableStateV2;
+  graphStateBubble: GraphMakerState;
+  alignmentModel: PlMultiSequenceAlignmentModel;
+  graphStateHistogram: GraphMakerState;
+  graphStateProbDist: GraphMakerState;
+};
+
+export const model = BlockModel.create()
+
+  .withArgs<BlockArgs>({
+    defaultBlockLabel: getDefaultBlockLabel({}),
+    customBlockLabel: '',
+    paratopeThreshold: 0.5,
+    identity: 0.8,
+    similarityType: 'alignment-score',
+    coverageThreshold: 0.9,
+    coverageMode: 0,
+  })
+
+  .withUiState<UiState>({
+    tableState: createPlDataTableStateV2(),
+    graphStateBubble: {
+      title: 'Most abundant clusters',
+      template: 'bubble',
+      currentTab: null,
+      layersSettings: {
+        bubble: {
+          normalizationDirection: null,
+        },
+      },
+    },
+    alignmentModel: {},
+    graphStateHistogram: {
+      title: 'Histogram',
+      template: 'bins',
+      currentTab: null,
+      layersSettings: {
+        bins: { fillColor: '#99e099' },
+      },
+      axesSettings: {
+        axisY: {
+          axisLabelsAngle: 90,
+          scale: 'log',
+        },
+        other: { binsCount: 30 },
+      },
+    },
+    graphStateProbDist: {
+      title: 'Parapred score distribution',
+      template: 'line',
+      currentTab: null,
+      layersSettings: {},
+    },
+  })
+
+  .argsValid((ctx) => ctx.args.datasetRef !== undefined)
+
+  .output('datasetOptions', (ctx) =>
+    ctx.resultPool.getOptions([{
+      axes: [
+        { name: 'pl7.app/sampleId' },
+        { name: 'pl7.app/vdj/clonotypeKey' },
+      ],
+      annotations: { 'pl7.app/isAnchor': 'true' },
+    }, {
+      axes: [
+        { name: 'pl7.app/sampleId' },
+        { name: 'pl7.app/vdj/scClonotypeKey' },
+      ],
+      annotations: { 'pl7.app/isAnchor': 'true' },
+    }],
+    {
+      label: { includeNativeLabel: false },
+    }),
+  )
+
+  .output('hasRequiredColumns', (ctx) => {
+    const ref = ctx.args.datasetRef;
+    if (ref === undefined) return undefined;
+
+    const isSingleCell = ctx.resultPool.getPColumnSpecByRef(ref)?.axesSpec[1].name === 'pl7.app/vdj/scClonotypeKey';
+
+    // At least one CDR column must be present
+    const cdrFeatures = ['CDR1', 'CDR2', 'CDR3'];
+    const hasAnyCdr = cdrFeatures.some((feature) => {
+      const matchers = isSingleCell
+        ? [{
+            axes: [{ anchor: 'main', idx: 1 }],
+            name: 'pl7.app/vdj/sequence',
+            domain: {
+              'pl7.app/vdj/feature': feature,
+              'pl7.app/vdj/scClonotypeChain/index': 'primary',
+              'pl7.app/alphabet': 'aminoacid',
+            },
+          }]
+        : [{
+            axes: [{ anchor: 'main', idx: 1 }],
+            name: 'pl7.app/vdj/sequence',
+            domain: {
+              'pl7.app/vdj/feature': feature,
+              'pl7.app/alphabet': 'aminoacid',
+            },
+          }];
+
+      const cols = ctx.resultPool.getAnchoredPColumns(
+        { main: ref },
+        matchers,
+      );
+      return cols && cols.length > 0;
+    });
+
+    return hasAnyCdr;
+  })
+
+  .output('isSingleCell', (ctx) => {
+    if (ctx.args.datasetRef === undefined) return undefined;
+
+    const spec = ctx.resultPool.getPColumnSpecByRef(ctx.args.datasetRef);
+    if (spec === undefined) {
+      return undefined;
+    }
+
+    return spec.axesSpec[1].name === 'pl7.app/vdj/scClonotypeKey';
+  })
+
+  .output('inputState', (ctx): boolean | undefined => {
+    const inputState = ctx.outputs?.resolve('isEmpty')?.getDataAsJson() as object;
+    if (typeof inputState === 'boolean') {
+      return inputState;
+    }
+    return undefined;
+  })
+
+  .outputWithStatus('clustersTable', (ctx) => {
+    const pCols = ctx.outputs?.resolve('clustersPf')?.getPColumns();
+    if (pCols === undefined) return undefined;
+    return createPlDataTableV2(ctx, pCols, ctx.uiState.tableState);
+  })
+
+  .output('mmseqsOutput', (ctx) => ctx.outputs?.resolve('mmseqsOutput')?.getLogHandle())
+
+  .output('msaPf', (ctx) => {
+    const msaCols = ctx.outputs?.resolve('msaPf')?.getPColumns();
+    if (!msaCols) return undefined;
+
+    const datasetRef = ctx.args.datasetRef;
+    if (datasetRef === undefined)
+      return undefined;
+
+    return createPFrameForGraphs(ctx, msaCols);
+  })
+
+  .output('linkerColumnId', (ctx) => {
+    const pCols = ctx.outputs?.resolve('msaPf')?.getPColumns();
+    if (!pCols) return undefined;
+    return pCols.find((p) => p.spec.annotations?.['pl7.app/isLinkerColumn'] === 'true')?.id;
+  })
+
+  .output('clusterAbundanceSpec', (ctx) => {
+    const spec = ctx.outputs?.resolve('clusterAbundanceSpec')?.getDataAsJson();
+    if (spec === undefined) return undefined;
+    return spec as PColumnSpec;
+  })
+
+  .output('inputSpec', (ctx) => {
+    const anchor = ctx.args.datasetRef;
+    if (anchor === undefined)
+      return undefined;
+    const anchorSpec = ctx.resultPool.getPColumnSpecByRef(anchor);
+    if (anchorSpec === undefined)
+      return undefined;
+    return anchorSpec;
+  })
+
+  .outputWithStatus('clustersPf', (ctx): PFrameHandle | undefined => {
+    const pCols = ctx.outputs?.resolve('pf')?.getPColumns();
+    if (pCols === undefined) {
+      return undefined;
+    }
+
+    return createPFrameForGraphs(ctx, pCols);
+  })
+
+  .outputWithStatus('bubblePlotPf', (ctx): PFrameHandle | undefined => {
+    const pCols = ctx.outputs?.resolve('bubblePlotPf')?.getPColumns();
+    if (pCols === undefined) {
+      return undefined;
+    }
+
+    return createPFrameForGraphs(ctx, pCols);
+  })
+
+  .output('bubblePlotPfPcols', (ctx) => {
+    const pCols = ctx.outputs?.resolve('bubblePlotPf')?.getPColumns();
+    if (pCols === undefined) {
+      return undefined;
+    }
+
+    return pCols.map(
+      (c) =>
+        ({
+          columnId: c.id,
+          spec: c.spec,
+        } satisfies PColumnIdAndSpec),
+    );
+  })
+
+  .output('clustersPfPcols', (ctx) => {
+    const pCols = ctx.outputs?.resolve('pf')?.getPColumns();
+    if (pCols === undefined || pCols.length === 0) {
+      return undefined;
+    }
+
+    return pCols.map(
+      (c) =>
+        ({
+          columnId: c.id,
+          spec: c.spec,
+        } satisfies PColumnIdAndSpec),
+    );
+  })
+
+  .outputWithStatus('probDistPf', (ctx): PFrameHandle | undefined => {
+    const pCols = ctx.outputs?.resolve('probDistPf')?.getPColumns();
+    if (pCols === undefined) {
+      return undefined;
+    }
+    return createPFrameForGraphs(ctx, pCols);
+  })
+
+  .output('probDistPfPcols', (ctx) => {
+    const pCols = ctx.outputs?.resolve('probDistPf')?.getPColumns();
+    if (pCols === undefined) {
+      return undefined;
+    }
+    return pCols.map(
+      (c) =>
+        ({
+          columnId: c.id,
+          spec: c.spec,
+        } satisfies PColumnIdAndSpec),
+    );
+  })
+
+  .output('isRunning', (ctx) => ctx.outputs?.getIsReadyOrError() === false)
+
+  .title(() => 'Paratope Clustering')
+
+  .subtitle((ctx) => ctx.args.customBlockLabel || ctx.args.defaultBlockLabel)
+
+  .sections((_ctx) => [
+    { type: 'link', href: '/', label: 'Main' },
+    { type: 'link', href: '/bubble', label: 'Most Abundant Clusters' },
+    { type: 'link', href: '/histogram', label: 'Cluster Size Histogram' },
+    { type: 'link', href: '/prob-dist', label: 'Parapred Score Distribution' },
+  ])
+
+  .done(2);
+
+export { getDefaultBlockLabel } from './label';
