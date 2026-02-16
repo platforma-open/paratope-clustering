@@ -9,6 +9,9 @@ ll := import("@platforma-sdk/workflow-tengo:ll")
 
 text := import("text")
 
+paratopSeqDescription := "CDR residues predicted as antigen-binding by Parapred, with sub-threshold positions masked as X"
+representativeSeqDescription := "Flanked CDR sequences (CDR with 2 FR residues on each side) of the cluster representative"
+
 clusteringTpl := assets.importTemplate(":clustering")
 emptyCheckTpl := assets.importTemplate(":empty-check")
 parapredTpl := assets.importTemplate(":parapred")
@@ -441,7 +444,7 @@ wf.body(func(args) {
 					valueType: spec.valueType,
 					domain: spec.domain,
 					annotations: spec.annotations
-				}, spec.annotations["pl7.app/label"], true, "4000")
+				}, spec.annotations["pl7.app/label"], false, "4000")
 			})
 		}
 	}
@@ -452,7 +455,10 @@ wf.body(func(args) {
 		column: "paratope_sequence",
 		spec: setTableProps({
 			name: "pl7.app/vdj/paratopeSequence",
-			valueType: "String"
+			valueType: "String",
+			annotations: {
+				"pl7.app/description": paratopSeqDescription
+			}
 		}, "Representative Paratope", true, "3500")
 	})
 
@@ -461,7 +467,10 @@ wf.body(func(args) {
 		column: "flanked_sequence",
 		spec: setTableProps({
 			name: "pl7.app/vdj/representativeSequence",
-			valueType: "String"
+			valueType: "String",
+			annotations: {
+				"pl7.app/description": representativeSeqDescription
+			}
 		}, "Representative Sequence", true, "3400")
 	})
 
@@ -535,14 +544,18 @@ wf.body(func(args) {
 				name: "pl7.app/vdj/paratopeSequence",
 				valueType: "String",
 				annotations: {
-					"pl7.app/sequence/paratope": "true"
+					"pl7.app/sequence/paratope": "true",
+					"pl7.app/description": paratopSeqDescription
 				}
 			}, "Paratope Sequence", false, undefined)
 		}, {
 			column: "flanked_sequence",
 			spec: setTableProps({
 				name: "pl7.app/vdj/representativeSequence",
-				valueType: "String"
+				valueType: "String",
+				annotations: {
+					"pl7.app/description": representativeSeqDescription
+				}
 			}, "Representative Sequence", false, undefined)
 		}],
 		storageFormat: "Parquet",
