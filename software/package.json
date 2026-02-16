@@ -1,6 +1,6 @@
 {
   "name": "@platforma-open/milaboratories.paratope-clustering.software",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "description": "Block Software",
   "scripts": {
@@ -37,7 +37,10 @@
       "run-parapred-pipeline": {
         "binary": {
           "artifact": "py-parapred",
-          "cmd": ["python", "{pkg}/run_parapred_pipeline.py"]
+          "cmd": [
+            "python",
+            "{pkg}/run_parapred_pipeline.py"
+          ]
         },
         "docker": {
           "artifact": {
@@ -45,25 +48,37 @@
             "context": "./src",
             "dockerfile": "./src/Dockerfile-parapred"
           },
-          "cmd": ["python", "/app/run_parapred_pipeline.py"]
+          "cmd": [
+            "python",
+            "/app/run_parapred_pipeline.py"
+          ]
         }
       },
       "process-results": {
         "binary": {
           "artifact": "py-archive",
-          "cmd": ["python", "{pkg}/process_results.py"]
+          "cmd": [
+            "python",
+            "{pkg}/process_results.py"
+          ]
         }
       },
       "empty-check": {
         "binary": {
           "artifact": "py-archive",
-          "cmd": ["python", "{pkg}/emptyCheck.py"]
+          "cmd": [
+            "python",
+            "{pkg}/emptyCheck.py"
+          ]
         }
       },
       "create-empty-files": {
         "binary": {
           "artifact": "py-archive",
-          "cmd": ["python", "{pkg}/create_empty_files.py"]
+          "cmd": [
+            "python",
+            "{pkg}/create_empty_files.py"
+          ]
         }
       }
     }
