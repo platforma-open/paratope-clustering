@@ -114,18 +114,21 @@ def predict_batch(model, flanked_sequences, max_length=40):
 
 def extract_paratope(cdr_seq, probs, cdr_start, cdr_end, threshold):
     """
-    Extract paratope residues from CDR region that exceed the probability threshold.
-    Only considers residues within the CDR boundaries (not the flanking residues).
+    Extract paratope from CDR region using X-masking: residues above the probability
+    threshold are kept, others are replaced with 'X'. This preserves positional alignment
+    so that MMseqs2 distances remain meaningful across clonotypes.
     """
     if not cdr_seq or len(probs) == 0:
         return ""
 
     paratope_residues = []
     for i in range(cdr_start, min(cdr_end, len(probs))):
-        if probs[i] >= threshold:
-            residue_idx = i - cdr_start
-            if residue_idx < len(cdr_seq):
+        residue_idx = i - cdr_start
+        if residue_idx < len(cdr_seq):
+            if probs[i] >= threshold:
                 paratope_residues.append(cdr_seq[residue_idx])
+            else:
+                paratope_residues.append('X')
 
     return "".join(paratope_residues)
 
@@ -265,8 +268,9 @@ def main():
         cdr_sequence = "".join(all_cdr_parts)
         flanked_sequence = "".join(all_flanked_parts)
 
-        # Fall back to full CDR sequence when paratope extraction yields nothing
-        if not paratope_sequence and cdr_sequence:
+        # Fall back to full CDR sequence when paratope is empty or all-X (no informative residues)
+        is_all_masked = paratope_sequence and all(c == 'X' for c in paratope_sequence)
+        if (not paratope_sequence or is_all_masked) and cdr_sequence:
             paratope_sequence = cdr_sequence
             fallback_count += 1
             if had_prediction_failure:
@@ -288,6 +292,32 @@ def main():
             }
         )
     print(f"[TIMING] Extract paratopes & build outputs: {time.time() - t0:.2f}s")
+
+    # Collect CDR-region probabilities and write histogram
+    t0 = time.time()
+    cdr_probs = []
+    for entry, probs in zip(all_entries, all_probs):
+        if len(probs) > 0 and entry["cdr_seq"]:
+            cdr_start = entry["cdr_start"]
+            cdr_end = min(entry["cdr_end"], len(probs))
+            for i in range(cdr_start, cdr_end):
+                residue_idx = i - cdr_start
+                if residue_idx < len(entry["cdr_seq"]):
+                    cdr_probs.append(probs[i])
+
+    if cdr_probs:
+        cdr_probs_arr = np.array(cdr_probs)
+        bin_edges = np.linspace(0.0, 1.0, 11)  # 10 bins
+        counts, _ = np.histogram(cdr_probs_arr, bins=bin_edges)
+        with open("probability-distribution.tsv", "w") as f:
+            f.write("probabilityBin\tresidueCount\n")
+            for i in range(len(counts)):
+                label = f"{int(bin_edges[i] * 100)}-{int(bin_edges[i + 1] * 100)}%"
+                f.write(f"{label}\t{counts[i]}\n")
+    else:
+        with open("probability-distribution.tsv", "w") as f:
+            f.write("probabilityBin\tresidueCount\n")
+    print(f"[TIMING] Write probability distribution ({len(cdr_probs)} values): {time.time() - t0:.2f}s")
 
     # Write FASTA output
     t0 = time.time()

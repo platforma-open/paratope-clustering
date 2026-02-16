@@ -33,6 +33,7 @@ export type UiState = {
   graphStateBubble: GraphMakerState;
   alignmentModel: PlMultiSequenceAlignmentModel;
   graphStateHistogram: GraphMakerState;
+  graphStateProbDist: GraphMakerState;
 };
 
 export const model = BlockModel.create()
@@ -74,6 +75,12 @@ export const model = BlockModel.create()
         },
         other: { binsCount: 30 },
       },
+    },
+    graphStateProbDist: {
+      title: 'Parapred score distribution',
+      template: 'line',
+      currentTab: null,
+      layersSettings: {},
     },
   })
 
@@ -244,6 +251,28 @@ export const model = BlockModel.create()
     );
   })
 
+  .outputWithStatus('probDistPf', (ctx): PFrameHandle | undefined => {
+    const pCols = ctx.outputs?.resolve('probDistPf')?.getPColumns();
+    if (pCols === undefined) {
+      return undefined;
+    }
+    return createPFrameForGraphs(ctx, pCols);
+  })
+
+  .output('probDistPfPcols', (ctx) => {
+    const pCols = ctx.outputs?.resolve('probDistPf')?.getPColumns();
+    if (pCols === undefined) {
+      return undefined;
+    }
+    return pCols.map(
+      (c) =>
+        ({
+          columnId: c.id,
+          spec: c.spec,
+        } satisfies PColumnIdAndSpec),
+    );
+  })
+
   .output('isRunning', (ctx) => ctx.outputs?.getIsReadyOrError() === false)
 
   .title(() => 'Paratope Clustering')
@@ -254,6 +283,7 @@ export const model = BlockModel.create()
     { type: 'link', href: '/', label: 'Main' },
     { type: 'link', href: '/bubble', label: 'Most Abundant Clusters' },
     { type: 'link', href: '/histogram', label: 'Cluster Size Histogram' },
+    { type: 'link', href: '/prob-dist', label: 'Parapred Score Distribution' },
   ])
 
   .done(2);

@@ -220,6 +220,7 @@ wf.body(func(args) {
 
 	fasta := parapredAnalysis.output("fasta")
 	paratopeSequences := parapredAnalysis.output("paratopeSequences")
+	probabilityDistribution := parapredAnalysis.output("probabilityDistribution")
 
 	// Run clustering
 	clusteringAnalysis := render.create(clusteringTpl, {
@@ -537,6 +538,38 @@ wf.body(func(args) {
 		partitionKeyLength: 0
 	}, {splitDataAndSpec: true, cpu: defaultConvCpu, mem: defaultConvMem})
 
+	// Probability distribution p-frame
+	probDistImported := xsv.importFile(probabilityDistribution, "tsv", {
+		axes: [{
+			column: "probabilityBin",
+			spec: {
+				name: "pl7.app/parapred/probabilityBin",
+				type: "String",
+				annotations: {
+					"pl7.app/label": "Probability Bin"
+				}
+			}
+		}],
+		columns: [{
+			column: "residueCount",
+			spec: {
+				name: "pl7.app/parapred/residueCount",
+				valueType: "Int",
+				annotations: {
+					"pl7.app/label": "Residue Count"
+				}
+			}
+		}],
+		storageFormat: "Parquet",
+		partitionKeyLength: 0
+	}, {splitDataAndSpec: true, cpu: defaultConvCpu, mem: defaultConvMem})
+
+	probDistPfBuilder := pframes.pFrameBuilder()
+	for k, v in probDistImported {
+		probDistPfBuilder.add(k, v.spec, v.data)
+	}
+	probDistPf := probDistPfBuilder.build()
+
 	// Build outputs & exports
 	traceLabel := args.customBlockLabel || args.defaultBlockLabel
 	trace := pSpec.makeTrace(
@@ -681,7 +714,8 @@ wf.body(func(args) {
 			clusterRadiusTop: clusteringAnalysis.output("clusterRadiusTop"),
 			abundancesTop: clusteringAnalysis.output("abundancesTop"),
 			paratopeSequences: clusteringAnalysis.output("paratopeSequences"),
-			isEmpty: isEmpty
+			isEmpty: isEmpty,
+			probDistPf: pframes.exportFrame(probDistPf)
 		},
 		exports: {
 			pf: epf

@@ -11,13 +11,14 @@ self.validateInputs({
 	paratopeThreshold: "number"
 })
 
-self.defineOutputs("fasta", "paratopeSequences")
+self.defineOutputs("fasta", "paratopeSequences", "probabilityDistribution")
 
 self.body(func(inputs) {
 	if string(inputs.emptyOrNot.getData()) == "empty" {
 		return {
 			fasta: {},
-			paratopeSequences: {}
+			paratopeSequences: {},
+			probabilityDistribution: {}
 		}
 	}
 
@@ -30,10 +31,12 @@ self.body(func(inputs) {
 		arg("--threshold").arg(string(inputs.paratopeThreshold)).
 		saveFile("output.fasta").
 		saveFile("paratope-sequences.tsv").
+		saveFile("probability-distribution.tsv").
 		run()
 
 	return {
 		fasta: result.getFile("output.fasta"),
-		paratopeSequences: result.getFile("paratope-sequences.tsv")
+		paratopeSequences: result.getFile("paratope-sequences.tsv"),
+		probabilityDistribution: result.getFile("probability-distribution.tsv")
 	}
 })
