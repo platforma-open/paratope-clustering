@@ -416,7 +416,7 @@ wf.body(func(args) {
 		featureCols := featureColumns[ref.feature]
 		if ref.chainIdx < len(featureCols) {
 			spec := maps.clone(featureCols[ref.chainIdx].spec)
-			spec.annotations["pl7.app/label"] = "Centroid " + spec.annotations["pl7.app/label"]
+			spec.annotations["pl7.app/label"] = "Representative " + spec.annotations["pl7.app/label"]
 
 			delete(spec.annotations, "pl7.app/vdj/imputed")
 			delete(spec.annotations, "pl7.app/vdj/isAssemblingFeature")
@@ -441,7 +441,7 @@ wf.body(func(args) {
 		spec: setTableProps({
 			name: "pl7.app/vdj/paratopeSequence",
 			valueType: "String"
-		}, "Centroid Paratope", true, "3500")
+		}, "Representative Paratope", true, "3500")
 	})
 
 	// Add flanked (representative) sequence column

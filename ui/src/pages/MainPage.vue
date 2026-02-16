@@ -123,8 +123,8 @@ const clusterAxis = computed<AxisId>(() => {
       />
 
       <PlAlert v-if="app.model.outputs.hasRequiredColumns === false" type="warn" style="margin-top: 1rem">
-        The selected dataset is missing required CDR/FR amino acid columns (CDR1-3, FR1-4).
-        Please select a dataset with all required sequence features.
+        The selected dataset has no CDR amino acid columns (CDR1, CDR2, or CDR3).
+        Please select a dataset with at least one CDR sequence feature.
       </PlAlert>
 
       <PlNumberField

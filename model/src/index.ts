@@ -104,8 +104,9 @@ export const model = BlockModel.create()
 
     const isSingleCell = ctx.resultPool.getPColumnSpecByRef(ref)?.axesSpec[1].name === 'pl7.app/vdj/scClonotypeKey';
 
-    const requiredFeatures = ['CDR1', 'CDR2', 'CDR3', 'FR1', 'FR2', 'FR3'];
-    for (const feature of requiredFeatures) {
+    // At least one CDR column must be present
+    const cdrFeatures = ['CDR1', 'CDR2', 'CDR3'];
+    const hasAnyCdr = cdrFeatures.some((feature) => {
       const matchers = isSingleCell
         ? [{
             axes: [{ anchor: 'main', idx: 1 }],
@@ -125,43 +126,14 @@ export const model = BlockModel.create()
             },
           }];
 
-      const cols = ctx.resultPool.getAnchoredPColumns(
-        { main: ref },
-        matchers,
-      );
-      if (!cols || cols.length === 0) return false;
-    }
-
-    // FR4 can also be named FR4InFrame in some datasets
-    const fr4Variants = ['FR4', 'FR4InFrame'];
-    const hasFR4 = fr4Variants.some((feature) => {
-      const matchers = isSingleCell
-        ? [{
-            axes: [{ anchor: 'main', idx: 1 }],
-            name: 'pl7.app/vdj/sequence',
-            domain: {
-              'pl7.app/vdj/feature': feature,
-              'pl7.app/vdj/scClonotypeChain/index': 'primary',
-              'pl7.app/alphabet': 'aminoacid',
-            },
-          }]
-        : [{
-            axes: [{ anchor: 'main', idx: 1 }],
-            name: 'pl7.app/vdj/sequence',
-            domain: {
-              'pl7.app/vdj/feature': feature,
-              'pl7.app/alphabet': 'aminoacid',
-            },
-          }];
       const cols = ctx.resultPool.getAnchoredPColumns(
         { main: ref },
         matchers,
       );
       return cols && cols.length > 0;
     });
-    if (!hasFR4) return false;
 
-    return true;
+    return hasAnyCdr;
   })
 
   .output('isSingleCell', (ctx) => {
