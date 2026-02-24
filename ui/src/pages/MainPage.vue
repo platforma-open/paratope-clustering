@@ -17,10 +17,17 @@ import {
   PlSlideModal,
   usePlDataTableSettingsV2,
 } from '@platforma-sdk/ui-vue';
+import { similarityTypeOptions } from '@platforma-open/milaboratories.paratope-clustering.model';
 import { computed, reactive, ref, watch } from 'vue';
 import { useApp } from '../app';
 
 const app = useApp();
+
+// Migrate legacy 'alignment-score' → 'blosum62'
+if ((app.model.args.similarityType as string) === 'alignment-score') {
+  app.model.args.similarityType = 'blosum62';
+}
+
 const multipleSequenceAlignmentOpen = ref(false);
 const mmseqsLogOpen = ref(false);
 const settingsOpen = ref(app.model.args.datasetRef === undefined);
@@ -55,11 +62,6 @@ function setInput(inputRef?: PlRef) {
 const tableSettings = usePlDataTableSettingsV2({
   model: () => app.model.outputs.clustersTable,
 });
-
-const similarityTypeOptions = [
-  { label: 'Exact Match', value: 'sequence-identity' },
-  { label: 'BLOSUM', value: 'alignment-score' },
-];
 
 const isSequenceColumn = (column: PColumnIdAndSpec) => {
   return column.spec?.annotations?.['pl7.app/sequence/paratope'] === 'true';
@@ -146,7 +148,7 @@ const clusterAxis = computed<AxisId>(() => {
         label="Alignment Score"
       >
         <template #tooltip>
-          Select the similarity metric used for clustering thresholds. BLOSUM considers biochemical similarity while Exact Match counts only identical residues.
+          Select the similarity metric used for paratope clustering. BLOSUM matrices score biochemical similarity between amino acids — lower numbers (e.g. BLOSUM40) are suited for more divergent sequences, higher numbers (e.g. BLOSUM80) for closely related sequences. BLOSUM62 is a good general-purpose default. Exact Match counts only identical residues.
         </template>
       </PlDropdown>
 
