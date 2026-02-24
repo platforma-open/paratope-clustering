@@ -84,7 +84,10 @@ self.body(func(inputs) {
 			cpu = inputs.cpu
 		}
 
-		mmseqs := exec.builder().
+		similarityType := inputs.similarityType
+		isAlignmentScore := similarityType != "sequence-identity"
+
+		mmseqsBuilder := exec.builder().
 			software(mmseqsSw).
 			mem(mem).
 			cpu(cpu).
@@ -98,7 +101,24 @@ self.body(func(inputs) {
 			arg("--min-seq-id").arg(string(inputs.identity)).
 			arg("-c").arg(string(inputs.coverageThreshold)).
 			arg("--cov-mode").arg(string(inputs.coverageMode)).
-			arg("--similarity-type").arg(inputs.similarityType == "sequence-identity" ? "2" : "1").
+			arg("--similarity-type").arg(isAlignmentScore ? "1" : "2")
+
+		// For non-default BLOSUM matrices, reference the .out file from the mmseqs2 package
+		// blosum62 is built into mmseqs2 binary, no --sub-mat needed
+		// "alignment-score" is legacy value equivalent to blosum62
+		nonDefaultBlosum := {
+			"blosum40": "blosum40.out",
+			"blosum50": "blosum50.out",
+			"blosum80": "blosum80.out",
+			"blosum90": "blosum90.out"
+		}
+		if !is_undefined(nonDefaultBlosum[similarityType]) {
+			matrixFile := nonDefaultBlosum[similarityType]
+			mmseqsBuilder = mmseqsBuilder.
+				arg("--sub-mat").argExpr("{pkg}/data/" + matrixFile)
+		}
+
+		mmseqs := mmseqsBuilder.
 			addFile("input.fasta", inputs.fasta).
 			saveFile("result_cluster.tsv").
 			saveStdoutStream().

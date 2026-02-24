@@ -1,6 +1,17 @@
+export const similarityTypeOptions = [
+  { label: 'Exact Match', value: 'sequence-identity' },
+  { label: 'BLOSUM40', value: 'blosum40' },
+  { label: 'BLOSUM50', value: 'blosum50' },
+  { label: 'BLOSUM62', value: 'blosum62' },
+  { label: 'BLOSUM80', value: 'blosum80' },
+  { label: 'BLOSUM90', value: 'blosum90' },
+] as const;
+
+type SimilarityType = (typeof similarityTypeOptions)[number]['value'];
+
 export function getDefaultBlockLabel(data: {
   paratopeThreshold?: number;
-  similarityType?: 'alignment-score' | 'sequence-identity';
+  similarityType?: SimilarityType;
   identity?: number;
   coverageThreshold?: number;
 }) {
@@ -8,12 +19,9 @@ export function getDefaultBlockLabel(data: {
 
   parts.push(`Paratope ${data.paratopeThreshold ?? 0.5}`);
 
-  const similarityLabels: Record<string, string> = {
-    'alignment-score': 'BLOSUM',
-    'sequence-identity': 'Exact Match',
-  };
   if (data.similarityType) {
-    parts.push(similarityLabels[data.similarityType] ?? '');
+    const label = similarityTypeOptions.find((o) => o.value === data.similarityType)?.label ?? 'BLOSUM62';
+    parts.push(label);
   }
 
   if (data.identity !== undefined) {

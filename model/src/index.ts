@@ -21,7 +21,7 @@ export type BlockArgs = {
   datasetRef?: PlRef;
   paratopeThreshold: number;
   identity: number;
-  similarityType: 'alignment-score' | 'sequence-identity';
+  similarityType: 'sequence-identity' | 'blosum40' | 'blosum50' | 'blosum62' | 'blosum80' | 'blosum90';
   coverageThreshold: number;
   coverageMode: 0 | 1 | 2 | 3 | 4 | 5;
   mem?: number;
@@ -43,7 +43,7 @@ export const model = BlockModel.create()
     customBlockLabel: '',
     paratopeThreshold: 0.5,
     identity: 0.8,
-    similarityType: 'alignment-score',
+    similarityType: 'blosum62',
     coverageThreshold: 0.9,
     coverageMode: 0,
   })
@@ -288,4 +288,4 @@ export const model = BlockModel.create()
 
   .done(2);
 
-export { getDefaultBlockLabel } from './label';
+export { getDefaultBlockLabel, similarityTypeOptions } from './label';
