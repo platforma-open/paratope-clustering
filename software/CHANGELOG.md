@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.paratope-clustering.software
 
+## 1.0.2
+
+### Patch Changes
+
+- e14fb21: Move PL_DOCKER_REGISTRY_PUSH_TO from passThroughEnv to env in turbo build config
+
 ## 1.0.1
 
 ### Patch Changes
