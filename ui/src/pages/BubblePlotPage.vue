@@ -1,13 +1,12 @@
 <script setup lang="ts">
-import '@milaboratories/graph-maker/styles';
 import strings from '@milaboratories/strings';
 import { PlBlockPage } from '@platforma-sdk/ui-vue';
 import { useApp } from '../app';
 
 import type { PredefinedGraphOption } from '@milaboratories/graph-maker';
 import { GraphMaker } from '@milaboratories/graph-maker';
-import { computed } from 'vue';
 import type { PColumnIdAndSpec } from '@platforma-sdk/model';
+import { computed } from 'vue';
 
 const app = useApp();
 
