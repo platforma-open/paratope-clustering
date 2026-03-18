@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.paratope-clustering.workflow
 
+## 1.0.5
+
+### Patch Changes
+
+- 9653382: Update cluster label to id
+
 ## 1.0.4
 
 ### Patch Changes
