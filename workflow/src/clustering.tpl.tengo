@@ -3,6 +3,8 @@ ll := import("@platforma-sdk/workflow-tengo:ll")
 exec := import("@platforma-sdk/workflow-tengo:exec")
 assets := import("@platforma-sdk/workflow-tengo:assets")
 
+math := import("math")
+
 processResultsSw := assets.importSoftware("@platforma-open/milaboratories.paratope-clustering.software:process-results")
 mmseqsSw := assets.importSoftware("@platforma-open/soedinglab.software-mmseqs2:main")
 createEmptyFilesSw := assets.importSoftware("@platforma-open/milaboratories.paratope-clustering.software:create-empty-files")
@@ -74,12 +76,14 @@ self.body(func(inputs) {
 		// Step 1: Run MMseqs2 clustering on paratope FASTA
 		memLimit := "{int(ceil(system.ram.gb * 0.8))}" + "G"
 
-		mem := "32GiB"
+		baseMemGiB := 32
+		if !is_undefined(inputs.mem) {
+			baseMemGiB = inputs.mem
+		}
+
+		mem := string(baseMemGiB) + "GiB"
 		cpu := 16
 
-		if !is_undefined(inputs.mem) {
-			mem = string(inputs.mem) + "GiB"
-		}
 		if !is_undefined(inputs.cpu) {
 			cpu = inputs.cpu
 		}
@@ -130,7 +134,7 @@ self.body(func(inputs) {
 		// Step 2: Process results
 		result := exec.builder().
 			software(processResultsSw).
-			mem("32GiB").
+			mem(string(int(math.max(32, baseMemGiB / 2))) + "GiB").
 			cpu(8).
 			addFile("clusters.tsv", clusters).
 			addFile("cloneTable.tsv", inputs.cloneTable).
