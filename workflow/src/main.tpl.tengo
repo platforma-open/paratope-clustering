@@ -106,12 +106,30 @@ wf.body(func(args) {
 		defaultConvCpu = args.cpu
 	}
 
+	// For single-cell data, keep only the primary chain of each chain type.
+	// MiXCR single-cell emits both primary and secondary chains; without this
+	// filter, secondary chains would be clustered alongside primary ones.
+	// Bulk columns do not have the scClonotypeChain/index domain key, so this
+	// filter is skipped for bulk data. Mirrors model/src/index.ts:117-134.
+	filterPrimaryChain := func(cols) {
+		if !isSingleCell {
+			return cols
+		}
+		filtered := []
+		for col in cols {
+			if col.spec.domain["pl7.app/vdj/scClonotypeChain/index"] == "primary" {
+				filtered = append(filtered, col)
+			}
+		}
+		return filtered
+	}
+
 	// Build input table with CDR/FR columns for parapred
 	// Detect available chains by checking which columns were returned
 	featureColumns := {}
 	numChains := 0
 	for feature in allFeatures {
-		featureCols := columns.getColumns(feature)
+		featureCols := filterPrimaryChain(columns.getColumns(feature))
 		featureColumns[feature] = featureCols
 		if len(featureCols) > numChains {
 			numChains = len(featureCols)
@@ -120,7 +138,7 @@ wf.body(func(args) {
 
 	// Fall back to FR4InFrame if FR4 has no columns
 	if len(featureColumns["FR4"]) == 0 {
-		fr4InFrame := columns.getColumns("FR4InFrame")
+		fr4InFrame := filterPrimaryChain(columns.getColumns("FR4InFrame"))
 		if len(fr4InFrame) > 0 {
 			featureColumns["FR4"] = fr4InFrame
 			if len(fr4InFrame) > numChains {
