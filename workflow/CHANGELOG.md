@@ -1,5 +1,12 @@
 # @platforma-open/milaboratories.paratope-clustering.workflow
 
+## 1.0.7
+
+### Patch Changes
+
+- 127d2cd: Change linker axes order to match linker column spec
+  Propagate cpu/memory to all workflow processes
+
 ## 1.0.6
 
 ### Patch Changes

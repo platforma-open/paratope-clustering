@@ -1,5 +1,12 @@
 # @platforma-open/milaboratories.paratope-clustering
 
+## 1.0.8
+
+### Patch Changes
+
+- Updated dependencies [127d2cd]
+  - @platforma-open/milaboratories.paratope-clustering.workflow@1.0.7
+
 ## 1.0.7
 
 ### Patch Changes
