@@ -8,6 +8,7 @@ pSpec := import("@platforma-sdk/workflow-tengo:pframes.spec")
 ll := import("@platforma-sdk/workflow-tengo:ll")
 
 text := import("text")
+math := import("math")
 
 paratopSeqDescription := "CDR residues predicted as antigen-binding by Parapred, with sub-threshold positions masked as X"
 representativeSeqDescription := "Flanked CDR sequences (CDR with 2 FR residues on each side) of the cluster representative"
@@ -97,14 +98,12 @@ wf.body(func(args) {
 	abundanceSpec := columns.getSpec("abundance")
 
 	isSingleCell := datasetSpec.axesSpec[1].name == "pl7.app/vdj/scClonotypeKey"
-	defaultConvMem := "16GiB"
-	defaultConvCpu := 1
+	baseMemGiB := 32
 	if !is_undefined(args.mem) {
-		defaultConvMem = string(args.mem) + "GiB"
+		baseMemGiB = args.mem
 	}
-	if !is_undefined(args.cpu) {
-		defaultConvCpu = args.cpu
-	}
+	defaultConvMem := string(int(math.max(16, baseMemGiB / 8))) + "GiB"
+	defaultConvCpu := 1
 
 	// For single-cell data, keep only the primary chain of each chain type.
 	// MiXCR single-cell emits both primary and secondary chains; without this
@@ -154,8 +153,8 @@ wf.body(func(args) {
 
 	// Build the sequence table for parapred input
 	seqTableBuilder := pframes.tsvFileBuilder()
-	seqTableBuilder.mem(defaultConvMem)
-	seqTableBuilder.cpu(defaultConvCpu)
+	seqTableBuilder.mem(string(int(math.max(32, baseMemGiB / 4))) + "GiB")
+	seqTableBuilder.cpu(4)
 	seqTableBuilder.setAxisHeader(datasetSpec.axesSpec[1].name, "clonotypeKey")
 
 	// Track sequence columns added (for numbering)
@@ -234,8 +233,8 @@ wf.body(func(args) {
 
 	cloneTableBuilder.setAxisHeader(abundanceSpec.axesSpec[0].name, "sampleId")
 	cloneTableBuilder.setAxisHeader(abundanceSpec.axesSpec[1].name, "clonotypeKey")
-	cloneTableBuilder.mem(defaultConvMem)
-	cloneTableBuilder.cpu(defaultConvCpu)
+	cloneTableBuilder.mem(string(int(math.max(32, baseMemGiB / 4))) + "GiB")
+	cloneTableBuilder.cpu(4)
 	cloneTable := cloneTableBuilder.build()
 
 	// Run Parapred pipeline
@@ -402,12 +401,14 @@ wf.body(func(args) {
 	}, {splitDataAndSpec: true, cpu: defaultConvCpu, mem: defaultConvMem})
 
 	cloneToClusterLinkPf := xsv.importFile(clusteringAnalysis.output("cloneToCluster"), "tsv", {
-		axes: [{
-			column: "clonotypeKey",
-			spec: datasetSpec.axesSpec[1]
-		}, {
+		axes: [
+		{
 			column: "clusterId",
 			spec: clusterIdAxisSpec
+		},
+		{
+			column: "clonotypeKey",
+			spec: datasetSpec.axesSpec[1]
 		}],
 		columns: [{
 			column: "link",
