@@ -105,22 +105,29 @@ wf.body(func(args) {
 	defaultConvMem := string(int(math.max(16, baseMemGiB / 8))) + "GiB"
 	defaultConvCpu := 1
 
-	// For single-cell data, keep only the primary chain of each chain type.
-	// MiXCR single-cell emits both primary and secondary chains; without this
-	// filter, secondary chains would be clustered alongside primary ones.
-	// Bulk columns do not have the scClonotypeChain/index domain key, so this
-	// filter is skipped for bulk data. Mirrors model/src/index.ts:117-134.
-	filterPrimaryChain := func(cols) {
+	// For single-cell data: keep only primary chains AND order them
+	// deterministically by scClonotypeChain (A before B).
+	// Bulk columns have no scClonotypeChain/index domain key, so this
+	// normalization is skipped for bulk data.
+	normalizePrimaryChainOrder := func(cols) {
 		if !isSingleCell {
 			return cols
 		}
-		filtered := []
+		byChain := {}
 		for col in cols {
-			if col.spec.domain["pl7.app/vdj/scClonotypeChain/index"] == "primary" {
-				filtered = append(filtered, col)
+			if col.spec.domain["pl7.app/vdj/scClonotypeChain/index"] != "primary" {
+				continue
+			}
+			sc := col.spec.domain["pl7.app/vdj/scClonotypeChain"]
+			byChain[sc] = col
+		}
+		ordered := []
+		for _, k in ["A", "B"] {
+			if !is_undefined(byChain[k]) {
+				ordered = append(ordered, byChain[k])
 			}
 		}
-		return filtered
+		return ordered
 	}
 
 	// Build input table with CDR/FR columns for parapred
@@ -128,7 +135,7 @@ wf.body(func(args) {
 	featureColumns := {}
 	numChains := 0
 	for feature in allFeatures {
-		featureCols := filterPrimaryChain(columns.getColumns(feature))
+		featureCols := normalizePrimaryChainOrder(columns.getColumns(feature))
 		featureColumns[feature] = featureCols
 		if len(featureCols) > numChains {
 			numChains = len(featureCols)
@@ -137,7 +144,7 @@ wf.body(func(args) {
 
 	// Fall back to FR4InFrame if FR4 has no columns
 	if len(featureColumns["FR4"]) == 0 {
-		fr4InFrame := filterPrimaryChain(columns.getColumns("FR4InFrame"))
+		fr4InFrame := normalizePrimaryChainOrder(columns.getColumns("FR4InFrame"))
 		if len(fr4InFrame) > 0 {
 			featureColumns["FR4"] = fr4InFrame
 			if len(fr4InFrame) > numChains {
