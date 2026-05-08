@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.paratope-clustering.workflow
 
+## 1.0.9
+
+### Patch Changes
+
+- 3283172: Make axis label visible by default
+
 ## 1.0.8
 
 ### Patch Changes
