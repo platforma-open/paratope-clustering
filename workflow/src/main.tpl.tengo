@@ -559,7 +559,7 @@ wf.body(func(args) {
 		partitionKeyLength: 0
 	}, {splitDataAndSpec: true, cpu: defaultConvCpu, mem: defaultConvMem})
 
-	// Paratope annotation p-frame (per-clonotype paratope + representative sequences)
+	// Per-clonotype paratope sequence p-frame (used as the MSA sequence column)
 	paratopeAnnotationPf := xsv.importFile(clusteringAnalysis.output("paratopeSequences"), "tsv", {
 		axes: [{
 			column: "clonotypeKey",
@@ -575,15 +575,6 @@ wf.body(func(args) {
 					"pl7.app/description": paratopSeqDescription
 				}
 			}, "Paratope Sequence", false, undefined)
-		}, {
-			column: "flanked_sequence",
-			spec: setTableProps({
-				name: "pl7.app/vdj/representativeSequence",
-				valueType: "String",
-				annotations: {
-					"pl7.app/description": representativeSeqDescription
-				}
-			}, "Representative Sequence", false, undefined)
 		}],
 		storageFormat: "Parquet",
 		partitionKeyLength: 0
@@ -718,9 +709,7 @@ wf.body(func(args) {
 	}
 	bubblePlotPf := bubblePlotPfBuilder.build()
 
-	// Generate pFrames for MSA
-	// Only include paratope_sequence (the sequence column), linker, and distances
-	// flanked_sequence is excluded since it's not used as a sequence column in MSA
+	// Generate pFrames for MSA: linker, distances, and paratope_sequence (the sequence column)
 	msaPf := pframes.pFrameBuilder()
 	i := 0
 	for pf in [cloneToClusterLinkPf, distancesPf] {
@@ -729,7 +718,6 @@ wf.body(func(args) {
 			i = i + 1
 		}
 	}
-	// Add only the paratope_sequence column from paratopeAnnotationPf
 	msaPf.add("paratope_sequence" + string(i), trace.inject(paratopeAnnotationPf["paratope_sequence"].spec), paratopeAnnotationPf["paratope_sequence"].data)
 	msaPf = msaPf.build()
 
