@@ -178,7 +178,15 @@ export const model = BlockModel.create()
     if (datasetRef === undefined)
       return undefined;
 
-    return createPFrameForGraphs(ctx, msaCols);
+    const labelCols = ctx.resultPool.getAnchoredPColumns(
+      { main: datasetRef },
+      [{
+        axes: [{ anchor: 'main', idx: 1 }],
+        name: 'pl7.app/label',
+      }],
+    ) ?? [];
+
+    return ctx.createPFrame([...msaCols, ...labelCols]);
   })
 
   .output('linkerColumnId', (ctx) => {
