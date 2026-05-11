@@ -1,5 +1,12 @@
 # @platforma-open/milaboratories.paratope-clustering.ui
 
+## 1.0.5
+
+### Patch Changes
+
+- Updated dependencies [69fcc61]
+  - @platforma-open/milaboratories.paratope-clustering.model@1.0.3
+
 ## 1.0.4
 
 ### Patch Changes
