@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.paratope-clustering
 
+## 1.0.12
+
+### Patch Changes
+
+- 427a8f2: Set clustering block order
+
 ## 1.0.11
 
 ### Patch Changes
