@@ -140,7 +140,13 @@ export const model = BlockModel.create()
       return cols && cols.length > 0;
     });
 
-    return hasAnyCdr;
+    if (hasAnyCdr) return true;
+
+    // No CDR columns yet: wait until the pool's data is fully loaded so we don't
+    // warn while an upstream block is still computing them.
+    if (!ctx.resultPool.getData().isComplete) return undefined;
+
+    return false;
   })
 
   .output('isSingleCell', (ctx) => {
