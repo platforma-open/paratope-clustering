@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.paratope-clustering.workflow
 
+## 1.0.11
+
+### Patch Changes
+
+- 51a0739: Don't warn about missing CDR columns while the dataset is still computing.
+
 ## 1.0.10
 
 ### Patch Changes
