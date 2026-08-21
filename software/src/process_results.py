@@ -31,9 +31,28 @@ if sequence_cols:
         pl.concat_str([pl.col(c).fill_null("") for c in sorted_sequence_cols], separator="====").alias('fullSequence')
     )
 
-# Transform clonotypeKeyLabel from "C-XXXXXX" to "CL-XXXXXX"
+# A cluster is labelled from its representative record's label. A leading `C-` (MiXCR) or `P-`
+# (peptide) is rewritten to `CL-`; a label carrying neither gets `CL-` prepended instead.
+#
+# Three things were wrong with the previous `str.replace('C-', 'CL-', n=1)`:
+#
+#   - the pattern was UNANCHORED, and polars treats it as a regex, so the first `C-` anywhere in
+#     the string was rewritten: `ABC-123` silently became `ABCL-123`;
+#   - `P-` was never handled, so peptide labels kept their record prefix;
+#   - a label matching neither passed through unchanged, so an imported set — whose labels are the
+#     scientist's own identifiers, e.g. `AB-001` or `trastuzumab` — showed each cluster under a
+#     bare record name, reading as a record rather than a cluster.
+#
+# Prepending keeps the representative's identity visible, which a generated index would lose.
+# Matches clonotype-clustering and 3d-structure-clustering, which label clusters from the same
+# upstream `pl7.app/label` column and can appear beside this block in one project.
 cloneTable = cloneTable.with_columns(
-    pl.col('clonotypeKeyLabel').str.replace('C-', 'CL-', n=1).alias('clusterLabel')
+    pl.when(pl.col('clonotypeKeyLabel').str.starts_with('CL-'))
+    .then(pl.col('clonotypeKeyLabel'))
+    .when(pl.col('clonotypeKeyLabel').str.contains(r'^[CP]-'))
+    .then(pl.col('clonotypeKeyLabel').str.replace(r'^[CP]-', 'CL-'))
+    .otherwise(pl.concat_str([pl.lit('CL-'), pl.col('clonotypeKeyLabel')]))
+    .alias('clusterLabel')
 )
 
 # Join paratope sequences to clone table
