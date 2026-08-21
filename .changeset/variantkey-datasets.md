@@ -1,5 +1,6 @@
 ---
 '@platforma-open/milaboratories.paratope-clustering.model': minor
+'@platforma-open/milaboratories.paratope-clustering.software': minor
 '@platforma-open/milaboratories.paratope-clustering.workflow': minor
 '@platforma-open/milaboratories.paratope-clustering': minor
 ---
@@ -32,3 +33,18 @@ at index 0 can differ from one feature to the next, and parapred would score a c
 and light regions. The model and the workflow both probe for a per-chain column instead.
 
 Bulk and legacy single-cell inputs are unaffected: both still take the paths they always took.
+
+**Cluster labels.** A cluster is labelled from its representative record's label, and a leading
+`C-` (MiXCR) became `CL-`. An imported set's labels are the scientist's own identifiers, so
+nothing was rewritten and every cluster appeared under a bare record name. Labels carrying no
+recognised prefix now get `CL-` prepended: `AB-001` becomes `CL-AB-001`. Labels already starting
+with `CL-` are left alone.
+
+The rewrite is also anchored now. polars reads the pattern as a regex and it was unanchored, so
+the first `C-` anywhere in a label was rewritten — an imported label `ABC-123` silently became
+`ABCL-123`. **MiXCR labels are unchanged either way**, since theirs start with `C-`; the anchor
+only affects labels the old expression was corrupting.
+
+`P-` (peptide) and `V-` (amplicon) are deliberately left alone. Neither producer can reach this
+block — both key on `pl7.app/variantKey` without `pl7.app/vdj/clonotypingRunId`, so the selector
+excludes them, and neither emits the CDR columns the block requires.
