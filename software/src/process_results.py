@@ -48,9 +48,7 @@ if sequence_cols:
 # the dataset selector excludes them, and neither emits the CDR columns `hasRequiredColumns`
 # demands. Adding branches for them would be dead code.
 cloneTable = cloneTable.with_columns(
-    pl.when(pl.col('clonotypeKeyLabel').str.starts_with('CL-'))
-    .then(pl.col('clonotypeKeyLabel'))
-    .when(pl.col('clonotypeKeyLabel').str.contains(r'^C-'))
+    pl.when(pl.col('clonotypeKeyLabel').str.contains(r'^C-'))
     .then(pl.col('clonotypeKeyLabel').str.replace(r'^C-', 'CL-'))
     .otherwise(pl.concat_str([pl.lit('CL-'), pl.col('clonotypeKeyLabel')]))
     .alias('clusterLabel')

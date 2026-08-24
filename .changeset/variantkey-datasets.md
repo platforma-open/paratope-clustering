@@ -37,8 +37,11 @@ Bulk and legacy single-cell inputs are unaffected: both still take the paths the
 **Cluster labels.** A cluster is labelled from its representative record's label, and a leading
 `C-` (MiXCR) became `CL-`. An imported set's labels are the scientist's own identifiers, so
 nothing was rewritten and every cluster appeared under a bare record name. Labels carrying no
-recognised prefix now get `CL-` prepended: `AB-001` becomes `CL-AB-001`. Labels already starting
-with `CL-` are left alone.
+recognised prefix now get `CL-` prepended: `AB-001` becomes `CL-AB-001`.
+
+A label already shaped like `CL-01` is prepended too, giving `CL-CL-01`. An imported set's labels
+are arbitrary, so `CL-01` is a record the scientist named that way; leaving it alone would show a
+cluster and a record under one identical string — the confusion this change exists to remove.
 
 The rewrite is also anchored now. polars reads the pattern as a regex and it was unanchored, so
 the first `C-` anywhere in a label was rewritten — an imported label `ABC-123` silently became
