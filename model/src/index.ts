@@ -2,6 +2,7 @@ import type { GraphMakerState } from '@milaboratories/graph-maker';
 import type {
   PColumnIdAndSpec,
   PColumnSpec,
+  ResultPool,
   PFrameHandle,
   PlDataTableStateV2,
   PlMultiSequenceAlignmentModel,
@@ -10,6 +11,7 @@ import type {
 import {
   BlockModel,
   createPFrameForGraphs,
+  isPColumnSpec,
   createPlDataTableStateV2,
   createPlDataTableV2,
 } from '@platforma-sdk/model';
@@ -35,6 +37,53 @@ export type UiState = {
   graphStateHistogram: GraphMakerState;
   graphStateProbDist: GraphMakerState;
 };
+
+/**
+ * Whether a dataset's row axis identifies receptor records this block can read paratopes from.
+ *
+ * `pl7.app/variantKey` is shared by three producers and the axis NAME does not say which:
+ * peptide-extraction stamps `pl7.app/peptide/extractionRunId`, synthetic-repertoire-profiler
+ * stamps `pl7.app/repertoire/extractionRunId`, and import-vdj-data's imported sets stamp
+ * `pl7.app/vdj/clonotypingRunId`. Only the last has CDRs, so the run-id key is what admits it
+ * without also offering peptides and amplicon variants to a paratope predictor.
+ *
+ * The value of that key is the producing block's id, so it cannot be written into a declarative
+ * axis selector — hence the predicate form of `getOptions` below.
+ */
+function isReceptorRecordAxis(axis: PColumnSpec['axesSpec'][number] | undefined): boolean {
+  if (axis === undefined) return false;
+  if (axis.name === 'pl7.app/vdj/clonotypeKey' || axis.name === 'pl7.app/vdj/scClonotypeKey') {
+    return true;
+  }
+  return (
+    axis.name === 'pl7.app/variantKey'
+    && axis.domain?.['pl7.app/vdj/clonotypingRunId'] !== undefined
+  );
+}
+
+/**
+ * Whether records carry two chains in one frame, in the `pl7.app/vdj/scClonotypeChain` COLUMN
+ * domain.
+ *
+ * Legacy MiXCR single-cell declares pairing on the axis NAME; an imported paired set declares it
+ * only on the columns, so the axis alone cannot answer. Probing for such a column covers both.
+ *
+ * This is load-bearing rather than cosmetic. The workflow's `normalizePrimaryChainOrder` keeps
+ * each feature's primary chain and orders them A-before-B, and parapred consumes chains
+ * POSITIONALLY as `CDR1_0` / `CDR1_1`. Skipping that normalisation on a paired set lets the chain
+ * at index 0 differ from one feature to the next, so parapred would score a chimera of heavy and
+ * light regions rather than either chain.
+ */
+function isPairedDataset(resultPool: ResultPool, ref: PlRef): boolean {
+  if (resultPool.getPColumnSpecByRef(ref)?.axesSpec[1]?.name === 'pl7.app/vdj/scClonotypeKey') {
+    return true;
+  }
+  const perChain = resultPool.getAnchoredPColumns({ main: ref }, [{
+    name: 'pl7.app/vdj/sequence',
+    domain: { 'pl7.app/vdj/scClonotypeChain/index': 'primary' },
+  }]);
+  return (perChain?.length ?? 0) > 0;
+}
 
 export const model = BlockModel.create()
 
@@ -87,29 +136,22 @@ export const model = BlockModel.create()
   .argsValid((ctx) => ctx.args.datasetRef !== undefined)
 
   .output('datasetOptions', (ctx) =>
-    ctx.resultPool.getOptions([{
-      axes: [
-        { name: 'pl7.app/sampleId' },
-        { name: 'pl7.app/vdj/clonotypeKey' },
-      ],
-      annotations: { 'pl7.app/isAnchor': 'true' },
-    }, {
-      axes: [
-        { name: 'pl7.app/sampleId' },
-        { name: 'pl7.app/vdj/scClonotypeKey' },
-      ],
-      annotations: { 'pl7.app/isAnchor': 'true' },
-    }],
-    {
-      label: { includeNativeLabel: false },
-    }),
+    ctx.resultPool.getOptions(
+      (spec) => isPColumnSpec(spec)
+        && spec.annotations?.['pl7.app/isAnchor'] === 'true'
+        && spec.axesSpec.length >= 2
+        && spec.axesSpec[0]?.name === 'pl7.app/sampleId'
+        && isReceptorRecordAxis(spec.axesSpec[1]),
+      {
+        label: { includeNativeLabel: false },
+      }),
   )
 
   .output('hasRequiredColumns', (ctx) => {
     const ref = ctx.args.datasetRef;
     if (ref === undefined) return undefined;
 
-    const isSingleCell = ctx.resultPool.getPColumnSpecByRef(ref)?.axesSpec[1].name === 'pl7.app/vdj/scClonotypeKey';
+    const isSingleCell = isPairedDataset(ctx.resultPool, ref);
 
     // At least one CDR column must be present
     const cdrFeatures = ['CDR1', 'CDR2', 'CDR3'];
@@ -157,7 +199,7 @@ export const model = BlockModel.create()
       return undefined;
     }
 
-    return spec.axesSpec[1].name === 'pl7.app/vdj/scClonotypeKey';
+    return isPairedDataset(ctx.resultPool, ctx.args.datasetRef);
   })
 
   .output('inputState', (ctx): boolean | undefined => {

@@ -31,9 +31,27 @@ if sequence_cols:
         pl.concat_str([pl.col(c).fill_null("") for c in sorted_sequence_cols], separator="====").alias('fullSequence')
     )
 
-# Transform clonotypeKeyLabel from "C-XXXXXX" to "CL-XXXXXX"
+# A cluster is labelled from its representative record's label: a leading `C-` (MiXCR) becomes
+# `CL-`, and a label carrying no recognised prefix gets `CL-` prepended.
+#
+# The prepend is what an imported set needs. Its labels are the scientist's own identifiers —
+# `AB-001`, `trastuzumab` — so nothing was rewritten and every cluster appeared under a bare
+# record name, indistinguishable from a record.
+#
+# The `^` anchor matters for the same inputs. polars reads the pattern as a regex, and the
+# previous one was unanchored, so the first `C-` ANYWHERE in a label was rewritten: an imported
+# label `ABC-123` silently became `ABCL-123`. MiXCR labels are unaffected either way — theirs
+# start with `C-` — so this only changes labels the old expression was corrupting.
+#
+# `P-` (peptide) and `V-` (amplicon) are deliberately not special-cased: neither producer can
+# reach this block. Both key on `pl7.app/variantKey` without `pl7.app/vdj/clonotypingRunId`, so
+# the dataset selector excludes them, and neither emits the CDR columns `hasRequiredColumns`
+# demands. Adding branches for them would be dead code.
 cloneTable = cloneTable.with_columns(
-    pl.col('clonotypeKeyLabel').str.replace('C-', 'CL-', n=1).alias('clusterLabel')
+    pl.when(pl.col('clonotypeKeyLabel').str.contains(r'^C-'))
+    .then(pl.col('clonotypeKeyLabel').str.replace(r'^C-', 'CL-'))
+    .otherwise(pl.concat_str([pl.lit('CL-'), pl.col('clonotypeKeyLabel')]))
+    .alias('clusterLabel')
 )
 
 # Join paratope sequences to clone table

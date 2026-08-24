@@ -97,7 +97,24 @@ wf.body(func(args) {
 	datasetSpec := columns.getSpec(args.datasetRef)
 	abundanceSpec := columns.getSpec("abundance")
 
+	// Whether records carry two chains in one frame, in the pl7.app/vdj/scClonotypeChain COLUMN
+	// domain. Legacy MiXCR single-cell says so on the axis name; an imported paired set says it
+	// only on the columns, so the axis alone cannot answer — ask the columns instead.
+	//
+	// This gates normalizePrimaryChainOrder below, which parapred depends on: it consumes chains
+	// positionally as CDR1_0 / CDR1_1, so the chain sitting at index 0 has to be the same one for
+	// every feature. Left unnormalised, a paired set can hand it heavy FR1 beside light CDR1.
 	isSingleCell := datasetSpec.axesSpec[1].name == "pl7.app/vdj/scClonotypeKey"
+	if !isSingleCell {
+		for feature in allFeatures {
+			for col in columns.getColumns(feature) {
+				dom := col.spec.domain
+				if !is_undefined(dom) && !is_undefined(dom["pl7.app/vdj/scClonotypeChain"]) {
+					isSingleCell = true
+				}
+			}
+		}
+	}
 	baseMemGiB := 32
 	if !is_undefined(args.mem) {
 		baseMemGiB = args.mem

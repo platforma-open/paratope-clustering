@@ -11,3 +11,8 @@ software/**/*.tgz
 .DS_Store
 .vscode/sftp.json
 test-dry-run.json
+
+# Python bytecode. Never commit: the package builder copies software/src wholesale, so a
+# stale .pyc shipped in the archive shadows the .py at import and the block silently runs old code.
+__pycache__/
+*.pyc
