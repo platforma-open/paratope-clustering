@@ -31,24 +31,36 @@ export const blockDataModel = new DataModelBuilder({ kind })
   // the contract leaves out are the five view states and `defaultBlockLabel`,
   // which a watchEffect in ui/src/app.ts recomputes from the clustering
   // parameters.
-  .init(({ params }) => ({
-    defaultBlockLabel: getDefaultBlockLabel({}),
-    customBlockLabel: params?.customBlockLabel ?? "",
-    datasetRef: params?.datasetRef,
-    paratopeThreshold: params?.paratopeThreshold ?? DEFAULT_PARATOPE_THRESHOLD,
-    identity: params?.identity ?? DEFAULT_IDENTITY,
-    similarityType: params?.similarityType ?? DEFAULT_SIMILARITY_TYPE,
-    coverageThreshold: params?.coverageThreshold ?? DEFAULT_COVERAGE_THRESHOLD,
-    coverageMode: params?.coverageMode ?? DEFAULT_COVERAGE_MODE,
-    mem: params?.mem,
-    cpu: params?.cpu,
+  .init(({ params }) => {
+    const clustering = {
+      paratopeThreshold: params?.paratopeThreshold ?? DEFAULT_PARATOPE_THRESHOLD,
+      identity: params?.identity ?? DEFAULT_IDENTITY,
+      similarityType: params?.similarityType ?? DEFAULT_SIMILARITY_TYPE,
+      coverageThreshold: params?.coverageThreshold ?? DEFAULT_COVERAGE_THRESHOLD,
+    };
 
-    tableState: createPlDataTableStateV2(),
-    graphStateBubble: defaultGraphStateBubble(),
-    alignmentModel: {},
-    graphStateHistogram: defaultGraphStateHistogram(),
-    graphStateProbDist: defaultGraphStateProbDist(),
-  }));
+    return {
+      // Derived from the resolved values, which is what the watchEffect in
+      // ui/src/app.ts derives it from too. It has to agree with that watcher
+      // from the start: the workflow reads it as the provenance trace label and
+      // it is part of the args, so a template that runs without the settings
+      // panel ever being opened would otherwise trace the wrong parameters and
+      // then re-run the moment someone looked at it.
+      defaultBlockLabel: getDefaultBlockLabel(clustering),
+      customBlockLabel: params?.customBlockLabel ?? "",
+      datasetRef: params?.datasetRef,
+      ...clustering,
+      coverageMode: params?.coverageMode ?? DEFAULT_COVERAGE_MODE,
+      mem: params?.mem,
+      cpu: params?.cpu,
+
+      tableState: createPlDataTableStateV2(),
+      graphStateBubble: defaultGraphStateBubble(),
+      alignmentModel: {},
+      graphStateHistogram: defaultGraphStateHistogram(),
+      graphStateProbDist: defaultGraphStateProbDist(),
+    };
+  });
 
 // Internals
 
