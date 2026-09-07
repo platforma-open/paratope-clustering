@@ -1,42 +1,26 @@
-import type { GraphMakerState } from '@milaboratories/graph-maker';
+import { kind } from "@platforma-open/milaboratories.paratope-clustering.kind";
 import type {
   PColumnIdAndSpec,
   PColumnSpec,
-  ResultPool,
   PFrameHandle,
-  PlDataTableStateV2,
-  PlMultiSequenceAlignmentModel,
   PlRef,
-} from '@platforma-sdk/model';
+  ResultPool,
+} from "@platforma-sdk/model";
 import {
-  BlockModel,
+  BlockModelV3,
   createPFrameForGraphs,
-  isPColumnSpec,
-  createPlDataTableStateV2,
   createPlDataTableV2,
-} from '@platforma-sdk/model';
-import { getDefaultBlockLabel } from './label';
+  isPColumnSpec,
+} from "@platforma-sdk/model";
+import { blockDataModel } from "./dataModel";
+import type { BlockArgs } from "./types";
 
-export type BlockArgs = {
-  defaultBlockLabel: string;
-  customBlockLabel: string;
-  datasetRef?: PlRef;
-  paratopeThreshold: number;
-  identity: number;
-  similarityType: 'sequence-identity' | 'blosum40' | 'blosum50' | 'blosum62' | 'blosum80' | 'blosum90';
-  coverageThreshold: number;
-  coverageMode: 0 | 1 | 2 | 3 | 4 | 5;
-  mem?: number;
-  cpu?: number;
-};
-
-export type UiState = {
-  tableState: PlDataTableStateV2;
-  graphStateBubble: GraphMakerState;
-  alignmentModel: PlMultiSequenceAlignmentModel;
-  graphStateHistogram: GraphMakerState;
-  graphStateProbDist: GraphMakerState;
-};
+export { blockDataModel } from "./dataModel";
+export type { BlockArgs, BlockData, LegacyBlockArgs, LegacyUiState } from "./types";
+// The clustering vocabulary lives in the kind: its init-params contract names
+// these types and a kind cannot import from the model. Re-exported so the UI
+// keeps a single import for both the block's own types and them.
+export type * from "@platforma-open/milaboratories.paratope-clustering.kind";
 
 /**
  * Whether a dataset's row axis identifies receptor records this block can read paratopes from.
@@ -50,14 +34,14 @@ export type UiState = {
  * The value of that key is the producing block's id, so it cannot be written into a declarative
  * axis selector — hence the predicate form of `getOptions` below.
  */
-function isReceptorRecordAxis(axis: PColumnSpec['axesSpec'][number] | undefined): boolean {
+function isReceptorRecordAxis(axis: PColumnSpec["axesSpec"][number] | undefined): boolean {
   if (axis === undefined) return false;
-  if (axis.name === 'pl7.app/vdj/clonotypeKey' || axis.name === 'pl7.app/vdj/scClonotypeKey') {
+  if (axis.name === "pl7.app/vdj/clonotypeKey" || axis.name === "pl7.app/vdj/scClonotypeKey") {
     return true;
   }
   return (
-    axis.name === 'pl7.app/variantKey'
-    && axis.domain?.['pl7.app/vdj/clonotypingRunId'] !== undefined
+    axis.name === "pl7.app/variantKey" &&
+    axis.domain?.["pl7.app/vdj/clonotypingRunId"] !== undefined
   );
 }
 
@@ -75,110 +59,103 @@ function isReceptorRecordAxis(axis: PColumnSpec['axesSpec'][number] | undefined)
  * light regions rather than either chain.
  */
 function isPairedDataset(resultPool: ResultPool, ref: PlRef): boolean {
-  if (resultPool.getPColumnSpecByRef(ref)?.axesSpec[1]?.name === 'pl7.app/vdj/scClonotypeKey') {
+  if (resultPool.getPColumnSpecByRef(ref)?.axesSpec[1]?.name === "pl7.app/vdj/scClonotypeKey") {
     return true;
   }
-  const perChain = resultPool.getAnchoredPColumns({ main: ref }, [{
-    name: 'pl7.app/vdj/sequence',
-    domain: { 'pl7.app/vdj/scClonotypeChain/index': 'primary' },
-  }]);
+  const perChain = resultPool.getAnchoredPColumns({ main: ref }, [
+    {
+      name: "pl7.app/vdj/sequence",
+      domain: { "pl7.app/vdj/scClonotypeChain/index": "primary" },
+    },
+  ]);
   return (perChain?.length ?? 0) > 0;
 }
 
-export const model = BlockModel.create()
+export const platforma = BlockModelV3.create({ dataModel: blockDataModel, kind })
 
-  .withArgs<BlockArgs>({
-    defaultBlockLabel: getDefaultBlockLabel({}),
-    customBlockLabel: '',
-    paratopeThreshold: 0.5,
-    identity: 0.8,
-    similarityType: 'blosum62',
-    coverageThreshold: 0.9,
-    coverageMode: 0,
+  // Replaces V1's `.argsValid`. The condition is the same; expressing it as a
+  // throw puts the reason in the UI instead of a silently disabled Run. No
+  // `.prerunArgs`: the block has no prerun template, so the args -> prerunArgs
+  // fallback has nothing to deadlock.
+  .args<BlockArgs>((data): BlockArgs => {
+    if (data.datasetRef === undefined) throw new Error("Input dataset is required");
+
+    return {
+      defaultBlockLabel: data.defaultBlockLabel,
+      customBlockLabel: data.customBlockLabel,
+      datasetRef: data.datasetRef,
+      paratopeThreshold: data.paratopeThreshold,
+      identity: data.identity,
+      similarityType: data.similarityType,
+      coverageThreshold: data.coverageThreshold,
+      coverageMode: data.coverageMode,
+      mem: data.mem,
+      cpu: data.cpu,
+    };
   })
 
-  .withUiState<UiState>({
-    tableState: createPlDataTableStateV2(),
-    graphStateBubble: {
-      title: 'Most abundant clusters',
-      template: 'bubble',
-      currentTab: null,
-      layersSettings: {
-        bubble: {
-          normalizationDirection: null,
-        },
-      },
-    },
-    alignmentModel: {},
-    graphStateHistogram: {
-      title: 'Histogram',
-      template: 'bins',
-      currentTab: null,
-      layersSettings: {
-        bins: { fillColor: '#99e099' },
-      },
-      axesSettings: {
-        axisY: {
-          axisLabelsAngle: 90,
-          scale: 'log',
-        },
-        other: { binsCount: 30 },
-      },
-    },
-    graphStateProbDist: {
-      title: 'Parapred score distribution',
-      template: 'line',
-      currentTab: null,
-      layersSettings: {},
-    },
-  })
+  // Inverse of the kind's init-params contract. `defaultBlockLabel` is derived
+  // by a watchEffect in ui/src/app.ts, so it is projected into args (the
+  // workflow reads it for the trace) but never templated.
+  .templateParams((data) => ({
+    datasetRef: data.datasetRef,
+    paratopeThreshold: data.paratopeThreshold,
+    identity: data.identity,
+    similarityType: data.similarityType,
+    coverageThreshold: data.coverageThreshold,
+    coverageMode: data.coverageMode,
+    customBlockLabel: data.customBlockLabel,
+    mem: data.mem,
+    cpu: data.cpu,
+  }))
 
-  .argsValid((ctx) => ctx.args.datasetRef !== undefined)
-
-  .output('datasetOptions', (ctx) =>
+  .output("datasetOptions", (ctx) =>
     ctx.resultPool.getOptions(
-      (spec) => isPColumnSpec(spec)
-        && spec.annotations?.['pl7.app/isAnchor'] === 'true'
-        && spec.axesSpec.length >= 2
-        && spec.axesSpec[0]?.name === 'pl7.app/sampleId'
-        && isReceptorRecordAxis(spec.axesSpec[1]),
+      (spec) =>
+        isPColumnSpec(spec) &&
+        spec.annotations?.["pl7.app/isAnchor"] === "true" &&
+        spec.axesSpec.length >= 2 &&
+        spec.axesSpec[0]?.name === "pl7.app/sampleId" &&
+        isReceptorRecordAxis(spec.axesSpec[1]),
       {
         label: { includeNativeLabel: false },
-      }),
+      },
+    ),
   )
 
-  .output('hasRequiredColumns', (ctx) => {
-    const ref = ctx.args.datasetRef;
+  .output("hasRequiredColumns", (ctx) => {
+    const ref = ctx.data.datasetRef;
     if (ref === undefined) return undefined;
 
     const isSingleCell = isPairedDataset(ctx.resultPool, ref);
 
     // At least one CDR column must be present
-    const cdrFeatures = ['CDR1', 'CDR2', 'CDR3'];
+    const cdrFeatures = ["CDR1", "CDR2", "CDR3"];
     const hasAnyCdr = cdrFeatures.some((feature) => {
       const matchers = isSingleCell
-        ? [{
-            axes: [{ anchor: 'main', idx: 1 }],
-            name: 'pl7.app/vdj/sequence',
-            domain: {
-              'pl7.app/vdj/feature': feature,
-              'pl7.app/vdj/scClonotypeChain/index': 'primary',
-              'pl7.app/alphabet': 'aminoacid',
+        ? [
+            {
+              axes: [{ anchor: "main", idx: 1 }],
+              name: "pl7.app/vdj/sequence",
+              domain: {
+                "pl7.app/vdj/feature": feature,
+                "pl7.app/vdj/scClonotypeChain/index": "primary",
+                "pl7.app/alphabet": "aminoacid",
+              },
             },
-          }]
-        : [{
-            axes: [{ anchor: 'main', idx: 1 }],
-            name: 'pl7.app/vdj/sequence',
-            domain: {
-              'pl7.app/vdj/feature': feature,
-              'pl7.app/alphabet': 'aminoacid',
+          ]
+        : [
+            {
+              axes: [{ anchor: "main", idx: 1 }],
+              name: "pl7.app/vdj/sequence",
+              domain: {
+                "pl7.app/vdj/feature": feature,
+                "pl7.app/alphabet": "aminoacid",
+              },
             },
-          }];
+          ];
 
-      const cols = ctx.resultPool.getAnchoredPColumns(
-        { main: ref },
-        matchers,
-      );
+      const cols = ctx.resultPool.getAnchoredPColumns({ main: ref }, matchers);
       return cols && cols.length > 0;
     });
 
@@ -191,76 +168,73 @@ export const model = BlockModel.create()
     return false;
   })
 
-  .output('isSingleCell', (ctx) => {
-    if (ctx.args.datasetRef === undefined) return undefined;
+  .output("isSingleCell", (ctx) => {
+    if (ctx.data.datasetRef === undefined) return undefined;
 
-    const spec = ctx.resultPool.getPColumnSpecByRef(ctx.args.datasetRef);
+    const spec = ctx.resultPool.getPColumnSpecByRef(ctx.data.datasetRef);
     if (spec === undefined) {
       return undefined;
     }
 
-    return isPairedDataset(ctx.resultPool, ctx.args.datasetRef);
+    return isPairedDataset(ctx.resultPool, ctx.data.datasetRef);
   })
 
-  .output('inputState', (ctx): boolean | undefined => {
-    const inputState = ctx.outputs?.resolve('isEmpty')?.getDataAsJson() as object;
-    if (typeof inputState === 'boolean') {
+  .output("inputState", (ctx): boolean | undefined => {
+    const inputState = ctx.outputs?.resolve("isEmpty")?.getDataAsJson() as object;
+    if (typeof inputState === "boolean") {
       return inputState;
     }
     return undefined;
   })
 
-  .outputWithStatus('clustersTable', (ctx) => {
-    const pCols = ctx.outputs?.resolve('clustersPf')?.getPColumns();
+  .outputWithStatus("clustersTable", (ctx) => {
+    const pCols = ctx.outputs?.resolve("clustersPf")?.getPColumns();
     if (pCols === undefined) return undefined;
-    return createPlDataTableV2(ctx, pCols, ctx.uiState.tableState);
+    return createPlDataTableV2(ctx, pCols, ctx.data.tableState);
   })
 
-  .output('mmseqsOutput', (ctx) => ctx.outputs?.resolve('mmseqsOutput')?.getLogHandle())
+  .output("mmseqsOutput", (ctx) => ctx.outputs?.resolve("mmseqsOutput")?.getLogHandle())
 
-  .output('msaPf', (ctx) => {
-    const msaCols = ctx.outputs?.resolve('msaPf')?.getPColumns();
+  .output("msaPf", (ctx) => {
+    const msaCols = ctx.outputs?.resolve("msaPf")?.getPColumns();
     if (!msaCols) return undefined;
 
-    const datasetRef = ctx.args.datasetRef;
-    if (datasetRef === undefined)
-      return undefined;
+    const datasetRef = ctx.data.datasetRef;
+    if (datasetRef === undefined) return undefined;
 
-    const labelCols = ctx.resultPool.getAnchoredPColumns(
-      { main: datasetRef },
-      [{
-        axes: [{ anchor: 'main', idx: 1 }],
-        name: 'pl7.app/label',
-      }],
-    ) ?? [];
+    const labelCols =
+      ctx.resultPool.getAnchoredPColumns({ main: datasetRef }, [
+        {
+          axes: [{ anchor: "main", idx: 1 }],
+          name: "pl7.app/label",
+        },
+      ]) ?? [];
 
     return ctx.createPFrame([...msaCols, ...labelCols]);
   })
 
-  .output('linkerColumnId', (ctx) => {
-    const pCols = ctx.outputs?.resolve('msaPf')?.getPColumns();
+  .output("linkerColumnId", (ctx) => {
+    const pCols = ctx.outputs?.resolve("msaPf")?.getPColumns();
     if (!pCols) return undefined;
-    return pCols.find((p) => p.spec.annotations?.['pl7.app/isLinkerColumn'] === 'true')?.id;
+    return pCols.find((p) => p.spec.annotations?.["pl7.app/isLinkerColumn"] === "true")?.id;
   })
 
-  .output('clusterAbundanceSpec', (ctx) => {
-    const spec = ctx.outputs?.resolve('clusterAbundanceSpec')?.getDataAsJson();
+  .output("clusterAbundanceSpec", (ctx) => {
+    const spec = ctx.outputs?.resolve("clusterAbundanceSpec")?.getDataAsJson();
     if (spec === undefined) return undefined;
     return spec as PColumnSpec;
   })
 
-  .output('inputSpec', (ctx) => {
-    const anchor = ctx.args.datasetRef;
-    if (anchor === undefined)
-      return undefined;
+  .output("inputSpec", (ctx) => {
+    const anchor = ctx.data.datasetRef;
+    if (anchor === undefined) return undefined;
     const anchorSpec = ctx.resultPool.getPColumnSpecByRef(anchor);
-    if (anchorSpec === undefined)
-      return undefined;
+    if (anchorSpec === undefined) return undefined;
     return anchorSpec;
   })
 
-  .outputWithStatus('clustersPf', (ctx): PFrameHandle | undefined => {
-    const pCols = ctx.outputs?.resolve('pf')?.getPColumns();
+  .outputWithStatus("clustersPf", (ctx): PFrameHandle | undefined => {
+    const pCols = ctx.outputs?.resolve("pf")?.getPColumns();
     if (pCols === undefined) {
       return undefined;
     }
@@ -268,8 +242,8 @@ export const model = BlockModel.create()
     return createPFrameForGraphs(ctx, pCols);
   })
 
-  .outputWithStatus('bubblePlotPf', (ctx): PFrameHandle | undefined => {
-    const pCols = ctx.outputs?.resolve('bubblePlotPf')?.getPColumns();
+  .outputWithStatus("bubblePlotPf", (ctx): PFrameHandle | undefined => {
+    const pCols = ctx.outputs?.resolve("bubblePlotPf")?.getPColumns();
     if (pCols === undefined) {
       return undefined;
     }
@@ -277,8 +251,8 @@ export const model = BlockModel.create()
     return createPFrameForGraphs(ctx, pCols);
   })
 
-  .output('bubblePlotPfPcols', (ctx) => {
-    const pCols = ctx.outputs?.resolve('bubblePlotPf')?.getPColumns();
+  .output("bubblePlotPfPcols", (ctx) => {
+    const pCols = ctx.outputs?.resolve("bubblePlotPf")?.getPColumns();
     if (pCols === undefined) {
       return undefined;
     }
@@ -288,12 +262,12 @@ export const model = BlockModel.create()
         ({
           columnId: c.id,
           spec: c.spec,
-        } satisfies PColumnIdAndSpec),
+        }) satisfies PColumnIdAndSpec,
     );
   })
 
-  .output('clustersPfPcols', (ctx) => {
-    const pCols = ctx.outputs?.resolve('pf')?.getPColumns();
+  .output("clustersPfPcols", (ctx) => {
+    const pCols = ctx.outputs?.resolve("pf")?.getPColumns();
     if (pCols === undefined || pCols.length === 0) {
       return undefined;
     }
@@ -303,20 +277,20 @@ export const model = BlockModel.create()
         ({
           columnId: c.id,
           spec: c.spec,
-        } satisfies PColumnIdAndSpec),
+        }) satisfies PColumnIdAndSpec,
     );
   })
 
-  .outputWithStatus('probDistPf', (ctx): PFrameHandle | undefined => {
-    const pCols = ctx.outputs?.resolve('probDistPf')?.getPColumns();
+  .outputWithStatus("probDistPf", (ctx): PFrameHandle | undefined => {
+    const pCols = ctx.outputs?.resolve("probDistPf")?.getPColumns();
     if (pCols === undefined) {
       return undefined;
     }
     return createPFrameForGraphs(ctx, pCols);
   })
 
-  .output('probDistPfPcols', (ctx) => {
-    const pCols = ctx.outputs?.resolve('probDistPf')?.getPColumns();
+  .output("probDistPfPcols", (ctx) => {
+    const pCols = ctx.outputs?.resolve("probDistPf")?.getPColumns();
     if (pCols === undefined) {
       return undefined;
     }
@@ -325,23 +299,23 @@ export const model = BlockModel.create()
         ({
           columnId: c.id,
           spec: c.spec,
-        } satisfies PColumnIdAndSpec),
+        }) satisfies PColumnIdAndSpec,
     );
   })
 
-  .output('isRunning', (ctx) => ctx.outputs?.getIsReadyOrError() === false)
+  .output("isRunning", (ctx) => ctx.outputs?.getIsReadyOrError() === false)
 
-  .title(() => 'Paratope Clustering')
+  .title(() => "Paratope Clustering")
 
-  .subtitle((ctx) => ctx.args.customBlockLabel || ctx.args.defaultBlockLabel)
+  .subtitle((ctx) => ctx.data.customBlockLabel || ctx.data.defaultBlockLabel)
 
   .sections((_ctx) => [
-    { type: 'link', href: '/', label: 'Main' },
-    { type: 'link', href: '/bubble', label: 'Most Abundant Clusters' },
-    { type: 'link', href: '/histogram', label: 'Cluster Size Histogram' },
-    { type: 'link', href: '/prob-dist', label: 'Parapred Score Distribution' },
+    { type: "link", href: "/", label: "Main" },
+    { type: "link", href: "/bubble", label: "Most Abundant Clusters" },
+    { type: "link", href: "/histogram", label: "Cluster Size Histogram" },
+    { type: "link", href: "/prob-dist", label: "Parapred Score Distribution" },
   ])
 
-  .done(2);
+  .done();
 
-export { getDefaultBlockLabel, similarityTypeOptions } from './label';
+export { getDefaultBlockLabel, similarityTypeOptions } from "./label";
