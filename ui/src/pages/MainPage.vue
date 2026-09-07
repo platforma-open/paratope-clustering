@@ -1,7 +1,13 @@
 <script setup lang="ts">
-import { PlMultiSequenceAlignment } from '@milaboratories/multi-sequence-alignment';
-import strings from '@milaboratories/strings';
-import type { AxisId, PColumnIdAndSpec, PlRef, PlSelectionModel, PTableKey } from '@platforma-sdk/model';
+import { PlMultiSequenceAlignment } from "@milaboratories/multi-sequence-alignment";
+import strings from "@milaboratories/strings";
+import type {
+  AxisId,
+  PColumnIdAndSpec,
+  PlRef,
+  PlSelectionModel,
+  PTableKey,
+} from "@platforma-sdk/model";
 import {
   PlAccordionSection,
   PlAgDataTableV2,
@@ -16,27 +22,30 @@ import {
   PlSectionSeparator,
   PlSlideModal,
   usePlDataTableSettingsV2,
-} from '@platforma-sdk/ui-vue';
-import { similarityTypeOptions } from '@platforma-open/milaboratories.paratope-clustering.model';
-import { computed, reactive, ref, watch } from 'vue';
-import { useApp } from '../app';
+} from "@platforma-sdk/ui-vue";
+import { similarityTypeOptions } from "@platforma-open/milaboratories.paratope-clustering.model";
+import { computed, reactive, ref, watch } from "vue";
+import { useApp } from "../app";
 
 const app = useApp();
 
 // Migrate legacy 'alignment-score' → 'blosum62'
-if ((app.model.args.similarityType as string) === 'alignment-score') {
-  app.model.args.similarityType = 'blosum62';
+if ((app.model.args.similarityType as string) === "alignment-score") {
+  app.model.args.similarityType = "blosum62";
 }
 
 const multipleSequenceAlignmentOpen = ref(false);
 const mmseqsLogOpen = ref(false);
 const settingsOpen = ref(app.model.args.datasetRef === undefined);
 
-watch(() => app.model.outputs.isRunning, (isRunning) => {
-  if (isRunning) {
-    settingsOpen.value = false;
-  }
-});
+watch(
+  () => app.model.outputs.isRunning,
+  (isRunning) => {
+    if (isRunning) {
+      settingsOpen.value = false;
+    }
+  },
+);
 
 const selection = ref<PlSelectionModel>({
   axesSpec: [],
@@ -64,25 +73,24 @@ const tableSettings = usePlDataTableSettingsV2({
 });
 
 const isSequenceColumn = (column: PColumnIdAndSpec) => {
-  return column.spec?.annotations?.['pl7.app/sequence/paratope'] === 'true';
+  return column.spec?.annotations?.["pl7.app/sequence/paratope"] === "true";
 };
 
 const clusterAxis = computed<AxisId>(() => {
   if (app.model.outputs.clusterAbundanceSpec?.axesSpec[1] === undefined) {
     return {
-      type: 'String',
-      name: 'pl7.app/vdj/clusterId',
+      type: "String",
+      name: "pl7.app/vdj/clusterId",
       domain: {},
     };
   } else {
     return {
-      type: 'String',
-      name: 'pl7.app/vdj/clusterId',
+      type: "String",
+      name: "pl7.app/vdj/clusterId",
       domain: app.model.outputs.clusterAbundanceSpec?.axesSpec[1].domain,
     };
   }
 });
-
 </script>
 
 <template>
@@ -124,9 +132,13 @@ const clusterAxis = computed<AxisId>(() => {
         @update:model-value="setInput"
       />
 
-      <PlAlert v-if="app.model.outputs.hasRequiredColumns === false" type="warn" style="margin-top: 1rem">
-        The selected dataset has no CDR amino acid columns (CDR1, CDR2, or CDR3).
-        Please select a dataset with at least one CDR sequence feature.
+      <PlAlert
+        v-if="app.model.outputs.hasRequiredColumns === false"
+        type="warn"
+        style="margin-top: 1rem"
+      >
+        The selected dataset has no CDR amino acid columns (CDR1, CDR2, or CDR3). Please select a
+        dataset with at least one CDR sequence feature.
       </PlAlert>
 
       <PlNumberField
@@ -137,8 +149,9 @@ const clusterAxis = computed<AxisId>(() => {
         :maxValue="1.0"
       >
         <template #tooltip>
-          Minimum Parapred probability for a residue to be classified as part of the paratope (antigen-binding site).
-          Lower values include more residues; higher values are more stringent.
+          Minimum Parapred probability for a residue to be classified as part of the paratope
+          (antigen-binding site). Lower values include more residues; higher values are more
+          stringent.
         </template>
       </PlNumberField>
 
@@ -148,7 +161,10 @@ const clusterAxis = computed<AxisId>(() => {
         label="Alignment Score"
       >
         <template #tooltip>
-          Select the similarity metric used for paratope clustering. BLOSUM matrices score biochemical similarity between amino acids — lower numbers (e.g. BLOSUM40) are suited for more divergent sequences, higher numbers (e.g. BLOSUM80) for closely related sequences. BLOSUM62 is a good general-purpose default. Exact Match counts only identical residues.
+          Select the similarity metric used for paratope clustering. BLOSUM matrices score
+          biochemical similarity between amino acids — lower numbers (e.g. BLOSUM40) are suited for
+          more divergent sequences, higher numbers (e.g. BLOSUM80) for closely related sequences.
+          BLOSUM62 is a good general-purpose default. Exact Match counts only identical residues.
         </template>
       </PlDropdown>
 
@@ -160,7 +176,8 @@ const clusterAxis = computed<AxisId>(() => {
         :maxValue="1.0"
       >
         <template #tooltip>
-          Sets the lowest percentage of identical residues required for paratope sequences to be considered for the same cluster.
+          Sets the lowest percentage of identical residues required for paratope sequences to be
+          considered for the same cluster.
         </template>
       </PlNumberField>
 
@@ -172,13 +189,13 @@ const clusterAxis = computed<AxisId>(() => {
         :maxValue="1.0"
       >
         <template #tooltip>
-          Sets the lowest percentage of sequence length that must be covered for paratope sequences to be considered for the same cluster.
+          Sets the lowest percentage of sequence length that must be covered for paratope sequences
+          to be considered for the same cluster.
         </template>
       </PlNumberField>
 
       <PlAlert v-if="app.model.outputs.inputState" type="warn" style="margin-top: 1rem">
-        Error: The input dataset you have selected is empty.
-        Please choose a different dataset.
+        Error: The input dataset you have selected is empty. Please choose a different dataset.
       </PlAlert>
 
       <PlAccordionSection label="Advanced Settings">
@@ -190,9 +207,7 @@ const clusterAxis = computed<AxisId>(() => {
           :step="1"
           :maxValue="1012"
         >
-          <template #tooltip>
-            Sets the amount of memory to use for the clustering.
-          </template>
+          <template #tooltip> Sets the amount of memory to use for the clustering. </template>
         </PlNumberField>
 
         <PlNumberField
@@ -202,9 +217,7 @@ const clusterAxis = computed<AxisId>(() => {
           :step="1"
           :maxValue="128"
         >
-          <template #tooltip>
-            Sets the number of CPU cores to use for the clustering.
-          </template>
+          <template #tooltip> Sets the number of CPU cores to use for the clustering. </template>
         </PlNumberField>
       </PlAccordionSection>
     </PlSlideModal>
