@@ -33,7 +33,7 @@ const defaultOptions = computed((): PredefinedGraphOption<"discrete">[] => {
 <template>
   <PlBlockPage>
     <GraphMaker
-      v-model="app.model.ui.graphStateProbDist"
+      v-model="app.model.data.graphStateProbDist"
       chartType="discrete"
       :p-frame="app.model.outputs.probDistPf"
       :default-options="defaultOptions"

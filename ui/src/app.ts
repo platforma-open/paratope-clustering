@@ -1,17 +1,15 @@
 import {
   getDefaultBlockLabel,
-  model,
+  platforma,
 } from "@platforma-open/milaboratories.paratope-clustering.model";
-import { defineApp } from "@platforma-sdk/ui-vue";
+import { defineAppV3 } from "@platforma-sdk/ui-vue";
 import { watchEffect } from "vue";
 import BubblePlotPage from "./pages/BubblePlotPage.vue";
 import MainPage from "./pages/MainPage.vue";
 import HistogramPage from "./pages/HistogramPage.vue";
 import ProbDistPage from "./pages/ProbDistPage.vue";
 
-export const sdkPlugin = defineApp(model, (app) => {
-  app.model.args.customBlockLabel ??= "";
-
+export const sdkPlugin = defineAppV3(platforma, (app) => {
   syncDefaultBlockLabel(app.model);
 
   return {
@@ -33,11 +31,11 @@ type AppModel = ReturnType<typeof useApp>["model"];
 
 function syncDefaultBlockLabel(model: AppModel) {
   watchEffect(() => {
-    model.args.defaultBlockLabel = getDefaultBlockLabel({
-      paratopeThreshold: model.args.paratopeThreshold,
-      similarityType: model.args.similarityType,
-      identity: model.args.identity,
-      coverageThreshold: model.args.coverageThreshold,
+    model.data.defaultBlockLabel = getDefaultBlockLabel({
+      paratopeThreshold: model.data.paratopeThreshold,
+      similarityType: model.data.similarityType,
+      identity: model.data.identity,
+      coverageThreshold: model.data.coverageThreshold,
     });
   });
 }

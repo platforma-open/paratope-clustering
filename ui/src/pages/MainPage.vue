@@ -30,13 +30,13 @@ import { useApp } from "../app";
 const app = useApp();
 
 // Migrate legacy 'alignment-score' → 'blosum62'
-if ((app.model.args.similarityType as string) === "alignment-score") {
-  app.model.args.similarityType = "blosum62";
+if ((app.model.data.similarityType as string) === "alignment-score") {
+  app.model.data.similarityType = "blosum62";
 }
 
 const multipleSequenceAlignmentOpen = ref(false);
 const mmseqsLogOpen = ref(false);
-const settingsOpen = ref(app.model.args.datasetRef === undefined);
+const settingsOpen = ref(app.model.data.datasetRef === undefined);
 
 watch(
   () => app.model.outputs.isRunning,
@@ -65,7 +65,7 @@ const onRowDoubleClicked = reactive((key?: PTableKey) => {
 });
 
 function setInput(inputRef?: PlRef) {
-  app.model.args.datasetRef = inputRef;
+  app.model.data.datasetRef = inputRef;
 }
 
 const tableSettings = usePlDataTableSettingsV2({
@@ -95,8 +95,8 @@ const clusterAxis = computed<AxisId>(() => {
 
 <template>
   <PlBlockPage
-    v-model:subtitle="app.model.args.customBlockLabel"
-    :subtitle-placeholder="app.model.args.defaultBlockLabel"
+    v-model:subtitle="app.model.data.customBlockLabel"
+    :subtitle-placeholder="app.model.data.defaultBlockLabel"
     title="Paratope Clustering"
   >
     <template #append>
@@ -114,7 +114,7 @@ const clusterAxis = computed<AxisId>(() => {
       </PlBtnGhost>
     </template>
     <PlAgDataTableV2
-      v-model="app.model.ui.tableState"
+      v-model="app.model.data.tableState"
       :settings="tableSettings"
       :not-ready-text="strings.callToActions.configureSettingsAndRun"
       :no-rows-text="strings.states.noDataAvailable"
@@ -124,7 +124,7 @@ const clusterAxis = computed<AxisId>(() => {
     <PlSlideModal v-model="settingsOpen" :close-on-outside-click="true" shadow>
       <template #title>Settings</template>
       <PlDropdownRef
-        v-model="app.model.args.datasetRef"
+        v-model="app.model.data.datasetRef"
         :options="app.model.outputs.datasetOptions"
         label="Dataset"
         clearable
@@ -142,7 +142,7 @@ const clusterAxis = computed<AxisId>(() => {
       </PlAlert>
 
       <PlNumberField
-        v-model="app.model.args.paratopeThreshold"
+        v-model="app.model.data.paratopeThreshold"
         label="Paratope Probability Threshold"
         :minValue="0.0"
         :step="0.05"
@@ -156,7 +156,7 @@ const clusterAxis = computed<AxisId>(() => {
       </PlNumberField>
 
       <PlDropdown
-        v-model="app.model.args.similarityType"
+        v-model="app.model.data.similarityType"
         :options="similarityTypeOptions"
         label="Alignment Score"
       >
@@ -169,7 +169,7 @@ const clusterAxis = computed<AxisId>(() => {
       </PlDropdown>
 
       <PlNumberField
-        v-model="app.model.args.identity"
+        v-model="app.model.data.identity"
         label="Minimal Identity"
         :minValue="0.1"
         :step="0.1"
@@ -182,7 +182,7 @@ const clusterAxis = computed<AxisId>(() => {
       </PlNumberField>
 
       <PlNumberField
-        v-model="app.model.args.coverageThreshold"
+        v-model="app.model.data.coverageThreshold"
         label="Coverage Threshold"
         :minValue="0.1"
         :step="0.1"
@@ -201,7 +201,7 @@ const clusterAxis = computed<AxisId>(() => {
       <PlAccordionSection label="Advanced Settings">
         <PlSectionSeparator>Resource Allocation</PlSectionSeparator>
         <PlNumberField
-          v-model="app.model.args.mem"
+          v-model="app.model.data.mem"
           label="Memory (GiB)"
           :minValue="1"
           :step="1"
@@ -211,7 +211,7 @@ const clusterAxis = computed<AxisId>(() => {
         </PlNumberField>
 
         <PlNumberField
-          v-model="app.model.args.cpu"
+          v-model="app.model.data.cpu"
           label="CPU (cores)"
           :minValue="1"
           :step="1"
@@ -230,7 +230,7 @@ const clusterAxis = computed<AxisId>(() => {
     <template #title>Multiple Sequence Alignment</template>
     <PlMultiSequenceAlignment
       v-if="app.model.outputs.inputState === false"
-      v-model="app.model.ui.alignmentModel"
+      v-model="app.model.data.alignmentModel"
       :sequence-column-predicate="isSequenceColumn"
       :p-frame="app.model.outputs.msaPf"
       :selection="selection"
