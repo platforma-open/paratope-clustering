@@ -62,8 +62,12 @@ function isPairedDataset(resultPool: ResultPool, ref: PlRef): boolean {
   if (resultPool.getPColumnSpecByRef(ref)?.axesSpec[1]?.name === "pl7.app/vdj/scClonotypeKey") {
     return true;
   }
+  // Scoped to the dataset's clonotype axis, like the CDR matchers this gates. A selector without
+  // `axes` carries no anchor reference at all, so it is matched against the whole result pool: a
+  // single-cell block anywhere in the project would mark every bulk dataset as paired.
   const perChain = resultPool.getAnchoredPColumns({ main: ref }, [
     {
+      axes: [{ anchor: "main", idx: 1 }],
       name: "pl7.app/vdj/sequence",
       domain: { "pl7.app/vdj/scClonotypeChain/index": "primary" },
     },
