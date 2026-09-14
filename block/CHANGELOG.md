@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.paratope-clustering
 
+## 1.2.2
+
+### Patch Changes
+
+- 68fca23: Update SDK and MSA
+
 ## 1.2.1
 
 ### Patch Changes
