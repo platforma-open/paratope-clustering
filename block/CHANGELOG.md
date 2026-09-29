@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.paratope-clustering
 
+## 1.2.3
+
+### Patch Changes
+
+- b7dd01d: Update SDK: PlAgDataTable no longer recreates its grid in an endless loop
+
 ## 1.2.2
 
 ### Patch Changes
