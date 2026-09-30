@@ -378,6 +378,11 @@ wf.body(func(args) {
 					fractionName = "pl7.app/vdj/readFraction"
 					abundanceUnit = "reads"
 				}
+				// Directly imported sets count records, whatever the column name says.
+				if ac.annotations["pl7.app/abundance/unit"] == "variants" {
+					fractionName = "pl7.app/vdj/variantFraction"
+					abundanceUnit = "variants"
+				}
 
 				abundanceFractionSpec := maps.deepMerge(ac, {
 					name: fractionName,
