@@ -1,5 +1,6 @@
 import { kind } from "@platforma-open/milaboratories.paratope-clustering.kind";
 import type {
+  DatasetOption,
   PColumnIdAndSpec,
   PColumnSpec,
   PFrameHandle,
@@ -8,6 +9,8 @@ import type {
 } from "@platforma-sdk/model";
 import {
   BlockModelV3,
+  buildDatasetOptions,
+  createGlobalPObjectId,
   createPFrameForGraphs,
   createPlDataTableV2,
   isPColumnSpec,
@@ -75,6 +78,13 @@ function isPairedDataset(resultPool: ResultPool, ref: PlRef): boolean {
   return (perChain?.length ?? 0) > 0;
 }
 
+// Key axes of the datasets this block accepts (see `isReceptorRecordAxis`).
+const DATASET_KEY_AXES: ReadonlySet<string> = new Set([
+  "pl7.app/vdj/clonotypeKey",
+  "pl7.app/vdj/scClonotypeKey",
+  "pl7.app/variantKey",
+]);
+
 export const platforma = BlockModelV3.create({ dataModel: blockDataModel, kind })
 
   // Replaces V1's `.argsValid`. The condition is the same; expressing it as a
@@ -95,6 +105,9 @@ export const platforma = BlockModelV3.create({ dataModel: blockDataModel, kind }
       coverageMode: data.coverageMode,
       mem: data.mem,
       cpu: data.cpu,
+      ...(data.filterRef !== undefined && {
+        inputFilter: createGlobalPObjectId(data.filterRef.blockId, data.filterRef.name),
+      }),
     };
   })
 
@@ -103,6 +116,7 @@ export const platforma = BlockModelV3.create({ dataModel: blockDataModel, kind }
   // workflow reads it for the trace) but never templated.
   .templateParams((data) => ({
     datasetRef: data.datasetRef,
+    filterRef: data.filterRef,
     paratopeThreshold: data.paratopeThreshold,
     identity: data.identity,
     similarityType: data.similarityType,
@@ -113,18 +127,24 @@ export const platforma = BlockModelV3.create({ dataModel: blockDataModel, kind }
     cpu: data.cpu,
   }))
 
-  .output("datasetOptions", (ctx) =>
-    ctx.resultPool.getOptions(
-      (spec) =>
-        isPColumnSpec(spec) &&
-        spec.annotations?.["pl7.app/isAnchor"] === "true" &&
-        spec.axesSpec.length >= 2 &&
-        spec.axesSpec[0]?.name === "pl7.app/sampleId" &&
-        isReceptorRecordAxis(spec.axesSpec[1]),
-      {
-        label: { includeNativeLabel: false },
-      },
-    ),
+  // `includeNativeLabel: false` was the label default, so the dataset labels are unchanged.
+  .output(
+    "datasetOptions",
+    (ctx): DatasetOption[] =>
+      buildDatasetOptions(ctx, {
+        primary: (spec) =>
+          isPColumnSpec(spec) &&
+          spec.annotations?.["pl7.app/isAnchor"] === "true" &&
+          spec.axesSpec.length >= 2 &&
+          spec.axesSpec[0]?.name === "pl7.app/sampleId" &&
+          isReceptorRecordAxis(spec.axesSpec[1]),
+        // Only subsets keyed by the receptor record axis alone
+        filter: (spec) =>
+          isPColumnSpec(spec) &&
+          spec.axesSpec.length === 1 &&
+          DATASET_KEY_AXES.has(spec.axesSpec[0].name),
+        requireEnrichments: false,
+      }) ?? [],
   )
 
   .output("hasRequiredColumns", (ctx) => {

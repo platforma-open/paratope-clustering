@@ -49,6 +49,7 @@ export const blockDataModel = new DataModelBuilder({ kind })
       defaultBlockLabel: getDefaultBlockLabel(clustering),
       customBlockLabel: params?.customBlockLabel ?? "",
       datasetRef: params?.datasetRef,
+      filterRef: params?.filterRef,
       ...clustering,
       coverageMode: params?.coverageMode ?? DEFAULT_COVERAGE_MODE,
       mem: params?.mem,

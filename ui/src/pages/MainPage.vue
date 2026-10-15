@@ -3,19 +3,20 @@ import { PlMultiSequenceAlignment } from "@milaboratories/multi-sequence-alignme
 import strings from "@milaboratories/strings";
 import type {
   AxisId,
+  DatasetSelection,
   PColumnIdAndSpec,
-  PlRef,
   PlSelectionModel,
   PTableKey,
 } from "@platforma-sdk/model";
+import { createDatasetSelection, createPrimaryRef } from "@platforma-sdk/model";
 import {
   PlAccordionSection,
   PlAgDataTableV2,
   PlAlert,
   PlBlockPage,
   PlBtnGhost,
+  PlDatasetSelector,
   PlDropdown,
-  PlDropdownRef,
   PlLogView,
   PlMaskIcon24,
   PlNumberField,
@@ -64,9 +65,19 @@ const onRowDoubleClicked = reactive((key?: PTableKey) => {
   multipleSequenceAlignmentOpen.value = true;
 });
 
-function setInput(inputRef?: PlRef) {
-  app.model.data.datasetRef = inputRef;
-}
+// The selector picks a dataset, or a dataset narrowed by one of its subset columns.
+// Stored as two refs so blocks saved before filters existed keep their `datasetRef`.
+const datasetSelection = computed<DatasetSelection | undefined>({
+  get: () => {
+    const { datasetRef, filterRef } = app.model.data;
+    if (datasetRef === undefined) return undefined;
+    return createDatasetSelection(createPrimaryRef(datasetRef, filterRef));
+  },
+  set: (selection) => {
+    app.model.data.datasetRef = selection?.primary.column;
+    app.model.data.filterRef = selection?.primary.filter;
+  },
+});
 
 const tableSettings = usePlDataTableSettingsV2({
   model: () => app.model.outputs.clustersTable,
@@ -123,13 +134,12 @@ const clusterAxis = computed<AxisId>(() => {
     />
     <PlSlideModal v-model="settingsOpen" :close-on-outside-click="true" shadow>
       <template #title>Settings</template>
-      <PlDropdownRef
-        v-model="app.model.data.datasetRef"
+      <PlDatasetSelector
+        v-model="datasetSelection"
         :options="app.model.outputs.datasetOptions"
         label="Dataset"
         clearable
         required
-        @update:model-value="setInput"
       />
 
       <PlAlert
@@ -195,7 +205,8 @@ const clusterAxis = computed<AxisId>(() => {
       </PlNumberField>
 
       <PlAlert v-if="app.model.outputs.inputState" type="warn" style="margin-top: 1rem">
-        Error: The input dataset you have selected is empty. Please choose a different dataset.
+        Error: The input dataset or subset you have selected is empty. Please choose a different
+        one.
       </PlAlert>
 
       <PlAccordionSection label="Advanced Settings">
