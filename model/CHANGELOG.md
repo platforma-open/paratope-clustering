@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.paratope-clustering.model
 
+## 1.2.2
+
+### Patch Changes
+
+- 64cf00e: Release every package through npm trusted publishing (OIDC) so each package's trusted publisher is used before it expires.
+
 ## 1.2.1
 
 ### Patch Changes
