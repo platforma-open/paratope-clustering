@@ -17,9 +17,9 @@ export type CoverageMode = 0 | 1 | 2 | 3 | 4 | 5;
 
 /**
  * This block's init-params contract — everything a user sets by hand: the
- * dataset to read CDRs from, the paratope probability cutoff, the three
- * clustering parameters mmseqs2 takes, the subtitle they type, and the resource
- * knobs the Advanced Settings section exposes.
+ * dataset to read CDRs from and its optional subset, the paratope probability
+ * cutoff, the three clustering parameters mmseqs2 takes, the subtitle they type,
+ * and the resource knobs the Advanced Settings section exposes.
  *
  * Left out are the five view-state fields (`tableState`, `alignmentModel` and
  * the three graph states) and `defaultBlockLabel`, which a `watchEffect` in
@@ -32,6 +32,8 @@ export type CoverageMode = 0 | 1 | 2 | 3 | 4 | 5;
  */
 export type BlockParams = {
   datasetRef?: PlRef;
+  /** A subset column (`pl7.app/isSubset`) the dataset is restricted to before the analysis. */
+  filterRef?: PlRef;
   paratopeThreshold?: number;
   identity?: number;
   similarityType?: SimilarityType;
@@ -48,6 +50,7 @@ function parseInitializationParams(value: unknown): BlockParams {
 
   const {
     datasetRef,
+    filterRef,
     paratopeThreshold,
     identity,
     similarityType,
@@ -59,7 +62,8 @@ function parseInitializationParams(value: unknown): BlockParams {
   } = value;
 
   return {
-    datasetRef: optionalPlRef(datasetRef),
+    datasetRef: optionalPlRef(datasetRef, "datasetRef", "a dataset reference"),
+    filterRef: optionalPlRef(filterRef, "filterRef", "a subset reference"),
     paratopeThreshold: optionalFraction(paratopeThreshold, "paratopeThreshold"),
     identity: optionalFraction(identity, "identity"),
     similarityType: optionalEnum(similarityType, SIMILARITY_TYPES, "similarityType"),
@@ -95,9 +99,9 @@ const COVERAGE_MODES: readonly CoverageMode[] = [0, 1, 2, 3, 4, 5];
 
 /** A reference to a column another block published. Checked with the SDK's own
  *  guard, so the brand and the optional enrichment flag stay in step with it. */
-function optionalPlRef(value: unknown): PlRef | undefined {
+function optionalPlRef(value: unknown, at: string, what: string): PlRef | undefined {
   if (value === undefined) return undefined;
-  if (!isPlRef(value)) throw new Error("'datasetRef' must be a dataset reference.");
+  if (!isPlRef(value)) throw new Error(`'${at}' must be ${what}.`);
   return value;
 }
 

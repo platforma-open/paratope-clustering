@@ -23,6 +23,8 @@ export type BlockData = {
   defaultBlockLabel: string;
   customBlockLabel: string;
   datasetRef?: PlRef;
+  /** Subset column picked with the dataset in PlDatasetSelector (e.g. a Repertoire Labeling label). */
+  filterRef?: PlRef;
   paratopeThreshold: number;
   identity: number;
   similarityType: SimilarityType;
@@ -55,6 +57,8 @@ export type BlockArgs = {
   coverageMode: CoverageMode;
   mem?: number;
   cpu?: number;
+  /** The subset's canonical column id. Set only on a subset run, so unfiltered args are unchanged. */
+  inputFilter?: string;
 };
 
 /** Legacy (V1) `args`, consumed once by `.upgradeLegacy`. */
