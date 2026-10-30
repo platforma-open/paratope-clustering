@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.paratope-clustering.workflow
 
+## 1.3.1
+
+### Patch Changes
+
+- 1f77559: Per-sample cluster abundance columns no longer carry pl7.app/isAnchor, so cluster axes are not mistaken for dataset axes.
+
 ## 1.3.0
 
 ### Minor Changes
