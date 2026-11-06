@@ -1,15 +1,14 @@
 import { kind } from "@platforma-open/milaboratories.paratope-clustering.kind";
 import { createPlDataTableStateV2, DataModelBuilder } from "@platforma-sdk/model";
-import { getDefaultBlockLabel } from "./label";
-import type { BlockData, LegacyBlockArgs, LegacyUiState } from "./types";
+import type { BlockData, BlockDataV1, LegacyBlockArgs, LegacyUiState } from "./types";
 
 export const blockDataModel = new DataModelBuilder({ kind })
-  .from<BlockData>("v1")
+  .from<BlockDataV1>("v1")
   // V1 split the same field set across `args` and `uiState`, so the upgrade
   // flattens the two channels into one and defaults anything a V1 project
   // could have been saved without.
   .upgradeLegacy<LegacyBlockArgs, LegacyUiState>(({ args, uiState }) => ({
-    defaultBlockLabel: args?.defaultBlockLabel ?? getDefaultBlockLabel({}),
+    defaultBlockLabel: args?.defaultBlockLabel ?? "",
     customBlockLabel: args?.customBlockLabel ?? "",
     datasetRef: args?.datasetRef,
     paratopeThreshold: args?.paratopeThreshold ?? DEFAULT_PARATOPE_THRESHOLD,
@@ -26,11 +25,12 @@ export const blockDataModel = new DataModelBuilder({ kind })
     graphStateHistogram: uiState?.graphStateHistogram ?? defaultGraphStateHistogram(),
     graphStateProbDist: uiState?.graphStateProbDist ?? defaultGraphStateProbDist(),
   }))
+  // v1 stored a label the UI derived from the clustering parameters; the
+  // model now derives it on demand, so the stored copy is dropped.
+  .migrate<BlockData>("v2", ({ defaultBlockLabel: _, ...rest }) => rest)
   // A block created from a template starts on the params its kind accepted; one
   // created by hand gets the defaults V1 handed out unconditionally. The fields
-  // the contract leaves out are the five view states and `defaultBlockLabel`,
-  // which a watchEffect in ui/src/app.ts recomputes from the clustering
-  // parameters.
+  // the contract leaves out are the five view states.
   .init(({ params }) => {
     const clustering = {
       paratopeThreshold: params?.paratopeThreshold ?? DEFAULT_PARATOPE_THRESHOLD,
@@ -40,13 +40,6 @@ export const blockDataModel = new DataModelBuilder({ kind })
     };
 
     return {
-      // Derived from the resolved values, which is what the watchEffect in
-      // ui/src/app.ts derives it from too. It has to agree with that watcher
-      // from the start: the workflow reads it as the provenance trace label and
-      // it is part of the args, so a template that runs without the settings
-      // panel ever being opened would otherwise trace the wrong parameters and
-      // then re-run the moment someone looked at it.
-      defaultBlockLabel: getDefaultBlockLabel(clustering),
       customBlockLabel: params?.customBlockLabel ?? "",
       datasetRef: params?.datasetRef,
       filterRef: params?.filterRef,

@@ -9,7 +9,7 @@ export const similarityTypeOptions = [
   { label: "BLOSUM90", value: "blosum90" },
 ] as const satisfies readonly { label: string; value: SimilarityType }[];
 
-export function getDefaultBlockLabel(data: {
+export function labelFromParams(data: {
   paratopeThreshold?: number;
   similarityType?: SimilarityType;
   identity?: number;

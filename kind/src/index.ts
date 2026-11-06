@@ -22,8 +22,7 @@ export type CoverageMode = 0 | 1 | 2 | 3 | 4 | 5;
  * and the resource knobs the Advanced Settings section exposes.
  *
  * Left out are the five view-state fields (`tableState`, `alignmentModel` and
- * the three graph states) and `defaultBlockLabel`, which a `watchEffect` in
- * `ui/src/app.ts` recomputes from the clustering parameters.
+ * the three graph states).
  *
  * Every field is optional because the projection hands live state back
  * untouched, and a half-configured block is ordinary state the UI reaches.
