@@ -14,13 +14,12 @@ import type {
 /**
  * Unified V3 data — the block's persisted state.
  *
- * The first ten fields are what V1 kept in `args` and the workflow consumes,
- * including both label fields (it reads them for the provenance trace). The
- * five below them are what V1 kept in `uiState`: table, alignment and graph
- * view state that no template reads and the workflow never sees.
+ * The fields above the blank line are the user's settings; the args derive the
+ * workflow's inputs and the provenance trace label from them. The five below
+ * are what V1 kept in `uiState`: table, alignment and graph view state that no
+ * template reads and the workflow never sees.
  */
 export type BlockData = {
-  defaultBlockLabel: string;
   customBlockLabel: string;
   datasetRef?: PlRef;
   /** Subset column picked with the dataset in PlDatasetSelector (e.g. a Repertoire Labeling label). */
@@ -41,14 +40,12 @@ export type BlockData = {
 };
 
 /**
- * Workflow-facing args — the same ten fields V1 projected, in the same order,
- * so an upgraded project hashes to what it hashed before and does not re-run.
- * The view state stays behind. The lambda's other job is the run gate, which
- * V1 expressed as `.argsValid`.
+ * Workflow-facing args. The view state stays behind. The lambda's other job is
+ * the run gate, which V1 expressed as `.argsValid`.
  */
 export type BlockArgs = {
-  defaultBlockLabel: string;
-  customBlockLabel: string;
+  /** Provenance trace label: the user's custom label, else one built from the clustering parameters. */
+  traceLabel: string;
   datasetRef?: PlRef;
   paratopeThreshold: number;
   identity: number;
@@ -59,6 +56,11 @@ export type BlockArgs = {
   cpu?: number;
   /** The subset's canonical column id. Set only on a subset run, so unfiltered args are unchanged. */
   inputFilter?: string;
+};
+
+/** Data version v1, which also stored the settings-derived label the UI computed. */
+export type BlockDataV1 = BlockData & {
+  defaultBlockLabel: string;
 };
 
 /** Legacy (V1) `args`, consumed once by `.upgradeLegacy`. */

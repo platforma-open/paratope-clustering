@@ -16,6 +16,7 @@ import {
   isPColumnSpec,
 } from "@platforma-sdk/model";
 import { blockDataModel } from "./dataModel";
+import { labelFromParams } from "./label";
 import type { BlockArgs } from "./types";
 
 export { blockDataModel } from "./dataModel";
@@ -95,8 +96,7 @@ export const platforma = BlockModelV3.create({ dataModel: blockDataModel, kind }
     if (data.datasetRef === undefined) throw new Error("Input dataset is required");
 
     return {
-      defaultBlockLabel: data.defaultBlockLabel,
-      customBlockLabel: data.customBlockLabel,
+      traceLabel: data.customBlockLabel || labelFromParams(data) || "Paratope Clustering",
       datasetRef: data.datasetRef,
       paratopeThreshold: data.paratopeThreshold,
       identity: data.identity,
@@ -111,9 +111,7 @@ export const platforma = BlockModelV3.create({ dataModel: blockDataModel, kind }
     };
   })
 
-  // Inverse of the kind's init-params contract. `defaultBlockLabel` is derived
-  // by a watchEffect in ui/src/app.ts, so it is projected into args (the
-  // workflow reads it for the trace) but never templated.
+  // Inverse of the kind's init-params contract.
   .templateParams((data) => ({
     datasetRef: data.datasetRef,
     filterRef: data.filterRef,
@@ -331,7 +329,7 @@ export const platforma = BlockModelV3.create({ dataModel: blockDataModel, kind }
 
   .title(() => "Paratope Clustering")
 
-  .subtitle((ctx) => ctx.data.customBlockLabel || ctx.data.defaultBlockLabel)
+  .subtitle((ctx) => ctx.data.customBlockLabel || labelFromParams(ctx.data))
 
   .sections((_ctx) => [
     { type: "link", href: "/", label: "Main" },
@@ -342,4 +340,4 @@ export const platforma = BlockModelV3.create({ dataModel: blockDataModel, kind }
 
   .done();
 
-export { getDefaultBlockLabel, similarityTypeOptions } from "./label";
+export { labelFromParams, similarityTypeOptions } from "./label";

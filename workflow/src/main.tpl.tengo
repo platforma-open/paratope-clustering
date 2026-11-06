@@ -660,7 +660,7 @@ wf.body(func(args) {
 	probDistPf := probDistPfBuilder.build()
 
 	// Build outputs & exports
-	traceLabel := args.customBlockLabel || args.defaultBlockLabel
+	traceLabel := args.traceLabel
 	trace := pSpec.makeTrace(
 		traceSpec,
 		{
