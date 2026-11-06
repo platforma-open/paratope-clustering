@@ -44,7 +44,7 @@ export type BlockData = {
  * the run gate, which V1 expressed as `.argsValid`.
  */
 export type BlockArgs = {
-  /** Provenance trace label: the user's custom label, else one built from the clustering parameters. */
+  /** Provenance trace label: the user's custom label, else the block name with the clustering parameters. */
   traceLabel: string;
   datasetRef?: PlRef;
   paratopeThreshold: number;

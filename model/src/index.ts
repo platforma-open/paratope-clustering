@@ -96,7 +96,7 @@ export const platforma = BlockModelV3.create({ dataModel: blockDataModel, kind }
     if (data.datasetRef === undefined) throw new Error("Input dataset is required");
 
     return {
-      traceLabel: data.customBlockLabel || labelFromParams(data) || "Paratope Clustering",
+      traceLabel: data.customBlockLabel || `Paratope Clustering (${labelFromParams(data)})`,
       datasetRef: data.datasetRef,
       paratopeThreshold: data.paratopeThreshold,
       identity: data.identity,
