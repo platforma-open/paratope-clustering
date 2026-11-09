@@ -24,7 +24,10 @@ import {
   PlSlideModal,
   usePlDataTableSettingsV2,
 } from "@platforma-sdk/ui-vue";
-import { similarityTypeOptions } from "@platforma-open/milaboratories.paratope-clustering.model";
+import {
+  labelFromParams,
+  similarityTypeOptions,
+} from "@platforma-open/milaboratories.paratope-clustering.model";
 import { computed, reactive, ref, watch } from "vue";
 import { useApp } from "../app";
 
@@ -107,7 +110,7 @@ const clusterAxis = computed<AxisId>(() => {
 <template>
   <PlBlockPage
     v-model:subtitle="app.model.data.customBlockLabel"
-    :subtitle-placeholder="app.model.data.defaultBlockLabel"
+    :subtitle-placeholder="labelFromParams(app.model.data)"
     title="Paratope Clustering"
   >
     <template #append>
