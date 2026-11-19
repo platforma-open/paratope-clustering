@@ -756,16 +756,20 @@ wf.body(func(args) {
 	}
 	bubblePlotPf := bubblePlotPfBuilder.build()
 
+	// Column keys are "<key>_<counter>": the separator keeps them unique. Without it
+	// "sequence_11" + "4" and "sequence_1" + "14" both give "sequence_114", and map
+	// iteration order is random, so such collisions happen intermittently.
+
 	// Generate pFrames for MSA: linker, distances, and paratope_sequence (the sequence column)
 	msaPf := pframes.pFrameBuilder()
 	i := 0
 	for pf in [cloneToClusterLinkPf, distancesPf] {
 		for k, v in pf {
-			msaPf.add(k + string(i), trace.inject(v.spec), v.data)
+			msaPf.add(k + "_" + string(i), trace.inject(v.spec), v.data)
 			i = i + 1
 		}
 	}
-	msaPf.add("paratope_sequence" + string(i), trace.inject(paratopeAnnotationPf["paratope_sequence"].spec), paratopeAnnotationPf["paratope_sequence"].data)
+	msaPf.add("paratope_sequence_" + string(i), trace.inject(paratopeAnnotationPf["paratope_sequence"].spec), paratopeAnnotationPf["paratope_sequence"].data)
 	msaPf = msaPf.build()
 
 	// Build export pFrame
@@ -773,7 +777,7 @@ wf.body(func(args) {
 	i = 0
 	for pf in [abundancesPf, cloneToClusterPf, cloneToClusterLinkPf, clusterToSeqPf, abundancesPerClusterPf, distancesPf, clusterRadiusPf, paratopeAnnotationPf] {
 		for k, v in pf {
-			epf.add(k + string(i), trace.inject(v.spec), v.data)
+			epf.add(k + "_" + string(i), trace.inject(v.spec), v.data)
 			i = i + 1
 		}
 	}
