@@ -1,6 +1,6 @@
 {
   "name": "@platforma-open/milaboratories.paratope-clustering.ui",
-  "version": "1.3.3",
+  "version": "1.3.4",
   "private": true,
   "type": "module",
   "scripts": {

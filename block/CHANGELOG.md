@@ -1,5 +1,11 @@
 # @platforma-open/milaboratories.paratope-clustering
 
+## 1.3.4
+
+### Patch Changes
+
+- 91fde99: Fix intermittent "field is already set" error when building the export and MSA pframes: column keys now separate the column name from the counter, so names like `sequence_1` and `sequence_11` can no longer produce the same key
+
 ## 1.3.3
 
 ### Patch Changes
